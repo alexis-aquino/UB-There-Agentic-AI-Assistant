@@ -3,7 +3,8 @@ import logging
 from fastapi import APIRouter, HTTPException
 
 from app.schemas import ChatQuery, ChatResponse
-from app.services.agent import MissingAPIKeyError, ask
+from app.services.agent import ask
+from app.services.providers import ProviderNotReadyError
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +15,7 @@ router = APIRouter(prefix="/api", tags=["chat"])
 def chat(query: ChatQuery) -> ChatResponse:
     try:
         reply = ask(query.message)
-    except MissingAPIKeyError as exc:
+    except ProviderNotReadyError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("Agent invocation failed")

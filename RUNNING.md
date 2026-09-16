@@ -1,43 +1,50 @@
 # How to Run UB There
 
-Step-by-step instructions for starting the app locally on Windows.
+The app runs on a **free local model (Ollama)** by default — no account, no API key, nothing leaves
+your machine. Switching to the paid OpenAI API is a one-line change, covered at the bottom.
 
 ---
 
-## Quick start (this machine)
+## Current state on this machine
 
-Python, Node, and all dependencies are **already installed**. Only two things are left:
+Everything below is already installed and working:
 
-### 1. Add your OpenAI API key
+- Python 3.12, Node.js 24, and all project dependencies
+- Ollama, with `llama3.2` (chat) and `nomic-embed-text` (embeddings)
+- `backend\.env` created, set to the free provider
+- Your `studenthandbook.pdf` indexed — 154 pages, 268 searchable chunks
 
-Get a key from https://platform.openai.com/api-keys, then:
+**To use it right now**, you only need to start the two servers (step 3).
+
+---
+
+## 1. Add your documents
+
+Put files in the **`upload uni info here`** folder at the top of the project.
+
+Supported: `.pdf`, `.docx`, `.txt`, `.md`, `.csv`, `.pptx`
+
+You can add as many as you like, or just one. The `README.md` in that folder is skipped
+automatically, so it never pollutes the answers.
+
+## 2. Rebuild the index
+
+Any time you add, remove, or change a file in that folder:
 
 ```powershell
 cd "C:\Users\Alex\UB THERE - Agentic AI Assistant\backend"
-Copy-Item .env.example .env
-notepad .env
-```
-
-Replace `sk-your-key-here` with your real key, save, and close Notepad.
-
-### 2. Build the search index
-
-```powershell
 .\.venv\Scripts\python.exe ingest.py
 ```
 
-Expected output:
+You should see something like `Indexed 268 chunk(s)`. This reads every document, converts it to
+searchable vectors with the local embedding model, and replaces the previous index — so re-running
+never creates duplicates. A 150-page PDF takes about a minute.
 
-```
-Loaded 3 document(s) from ...\data\sample_docs
-Indexed 3 chunk(s) into 'university_docs'.
-```
+**The chatbot only knows what has been indexed.** Adding a file does nothing until you run this.
 
-This calls OpenAI to create embeddings, so it costs a fraction of a cent and needs the key from step 1.
+## 3. Start it
 
-### 3. Start it
-
-You need **two terminals** running at the same time.
+Two terminals, both left running.
 
 **Terminal 1 — backend:**
 
@@ -46,8 +53,6 @@ cd "C:\Users\Alex\UB THERE - Agentic AI Assistant\backend"
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
 ```
 
-Wait for `Application startup complete.`
-
 **Terminal 2 — frontend:**
 
 ```powershell
@@ -55,125 +60,129 @@ cd "C:\Users\Alex\UB THERE - Agentic AI Assistant\frontend"
 npm run dev
 ```
 
-Then open **http://localhost:5173** in your browser and ask a question, for example:
+Open **http://localhost:5173** and ask a question. Answers take about 8-15 seconds on the local
+model; the very first one after a cold start is slower while the model loads into your GPU.
+`Ctrl+C` in either terminal stops that server.
 
-> What is the tuition refund policy if I withdraw in week 3?
-
-To stop either server, click its terminal and press `Ctrl+C`.
-
----
-
-## Checking it works
-
-Before opening the browser, you can confirm the backend is healthy:
+### Quick check without the browser
 
 ```powershell
 curl.exe http://localhost:8000/api/health
 ```
 
-A good response looks like this — note `openai_key_configured` must be `true`:
+Healthy output — `provider_ready` must be `true`:
 
 ```json
-{"status":"ok","openai_key_configured":true,"collection":"university_docs"}
+{"status":"ok","provider":"ollama","provider_ready":true,"detail":"ready","collection":"university_docs_ollama"}
 ```
 
-You can also browse the interactive API docs at **http://localhost:8000/docs** and try the
-`/api/chat` endpoint there without the frontend.
+---
+
+## Switching to OpenAI later
+
+The free local model is noticeably weaker at reading tables and following instructions. When you
+want better answers:
+
+1. Get a key at https://platform.openai.com/api-keys (this is paid, roughly a cent per few dozen
+   questions on `gpt-4o`).
+2. Edit `backend\.env`:
+
+   ```
+   LLM_PROVIDER=openai
+   OPENAI_API_KEY=sk-your-real-key-here
+   ```
+
+3. Re-run `ingest.py`, then restart the backend.
+
+The re-ingest is required because the two providers produce different embedding formats. Each
+provider keeps its **own** index (`university_docs_ollama` vs `university_docs_openai`), so
+switching back and forth later needs no re-indexing — both stay built.
+
+To go back to free, set `LLM_PROVIDER=ollama` and restart. No other code changes.
+
+---
+
+## What works well, and what doesn't
+
+Tested against your actual handbook:
+
+**Works well** — anything written as ordinary prose, answered with a real page citation:
+> *"What happens if a student is absent for too many hours?"*
+> → *"According to [studenthandbook.pdf p.53] ... dropped from the subject if hours lost reach 20%."*
+> Verified correct against page 53.
+
+**Declines honestly** — data locked in a **table**. PDF extraction flattens tables into loose runs of
+numbers, so the grade-weighting breakdowns on pages 46-48 aren't retrievable. Asked for the
+midterm/finals split, it now says it cannot find that and suggests the registrar, rather than
+inventing a number. If you need those figures, restate them in a plain `.txt` file in the upload
+folder next to the PDF.
+
+**Watch out for** — words the handbook uses in two senses. Asking about "class suspensions" matches
+the *disciplinary* suspension pages, because that's what "suspension" nearly always means in this
+document. Phrasing questions with distinctive wording helps.
+
+Switching to OpenAI improves fluency and table handling somewhat, but tables remain the weak area
+for any provider.
 
 ---
 
 ## Setup from scratch (a different machine)
 
-Skip this if you are on the machine the project was built on.
-
-### Install the runtimes
-
 ```powershell
 winget install --id Python.Python.3.12 -e
 winget install --id OpenJS.NodeJS.LTS -e
+winget install --id Ollama.Ollama -e
 ```
 
-**Close and reopen your terminal** afterward, or the new commands will not be found. Verify:
+Close and reopen the terminal, then:
 
 ```powershell
-python --version   # expect 3.12.x
-node --version     # expect v20 or v24
-```
+ollama pull llama3.2
+ollama pull nomic-embed-text
 
-### Set up the backend
-
-```powershell
 cd backend
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-Copy-Item .env.example .env     # then edit .env and add your OPENAI_API_KEY
+Copy-Item .env.example .env
 .\.venv\Scripts\python.exe ingest.py
-```
 
-The first install downloads a lot (LangChain, LlamaIndex, ChromaDB) and takes several minutes.
-
-### Set up the frontend
-
-```powershell
 cd ..\frontend
 npm install
 Copy-Item .env.example .env
 ```
 
-Then follow **step 3** above to start both servers.
-
----
-
-## Using real university documents
-
-The three files in `backend\data\sample_docs\` are placeholders with invented policies. To use real
-content:
-
-1. Delete the placeholder files.
-2. Drop real documents in that folder — `.txt`, `.md`, `.pdf`, and `.docx` all work.
-3. Rebuild the index:
-
-   ```powershell
-   cd backend
-   .\.venv\Scripts\python.exe ingest.py
-   ```
-
-Each run rebuilds the collection from scratch, so re-running never creates duplicate entries.
-Restart the backend afterward so it picks up the new index.
+Then follow step 3 above.
 
 ---
 
 ## Troubleshooting
 
+**`Cannot reach Ollama at http://localhost:11434`**
+Ollama isn't running. Start it with `ollama serve`, or launch the Ollama app from the Start menu.
+Confirm with `ollama list` — you should see `llama3.2` and `nomic-embed-text`.
+
+**Answers are slow**
+First question after starting loads the model into VRAM. If every answer is slow, check the model is
+on the GPU with `ollama ps` — `100% GPU` is what you want on your GTX 1660 SUPER.
+
+**"No documents found in ... upload uni info here"**
+The folder has only the README in it. Add real documents and re-run `ingest.py`.
+
+**Chatbot answers about the wrong topic, or says it has no information**
+The index is stale or the question doesn't match the document's wording. Re-run `ingest.py`, and try
+phrasing the question using words that actually appear in the handbook.
+
 **`python` or `npm` is not recognized**
 The terminal was open before the install. Close it and open a new one.
 
 **`running scripts is disabled on this system`**
-You tried `.\.venv\Scripts\Activate.ps1`. Either use the `.\.venv\Scripts\python.exe` form shown
-above, which needs no activation, or run this once:
-
-```powershell
-Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
-```
-
-**Chat replies with `OPENAI_API_KEY is not set`**
-`backend\.env` is missing or still has the placeholder key. Check that the file is named exactly
-`.env` (not `.env.txt` — Notepad adds that silently) and that the line reads `OPENAI_API_KEY=sk-...`.
-Restart the backend after editing.
-
-**Chat replies that it cannot find the information**
-The index is empty or was never built. Run `ingest.py` and confirm it reports indexed chunks.
+Use the `.\.venv\Scripts\python.exe` form shown above, which needs no venv activation. Or run
+`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
 
 **`Failed to fetch` in the browser**
-The backend is not running, or it started on a different port. Confirm Terminal 1 shows
-`Application startup complete.` and that `VITE_API_URL` in `frontend\.env` matches the backend's
-address.
-
-**`1 package has install scripts not yet covered by allowScripts`**
-npm blocked esbuild, which Vite needs. Run `npm approve-scripts esbuild`, then `npm install` again.
+The backend isn't running, or is on a different port than `VITE_API_URL` in `frontend\.env`.
 
 **Port already in use**
-An older server is still running. Find and stop it:
 
 ```powershell
 Get-Process python, node -ErrorAction SilentlyContinue | Stop-Process -Force
@@ -181,11 +190,7 @@ Get-Process python, node -ErrorAction SilentlyContinue | Stop-Process -Force
 
 ---
 
-## What this version does and does not do
+## Not built yet
 
-It answers questions about university policies by searching the documents in
-`backend\data\sample_docs\` and summarizing what it finds with GPT-4o.
-
-It does **not** yet have a database (no login, no saved chat history — refreshing the page clears the
-conversation, and it does not remember earlier messages within a conversation either), and it does
-**not** yet accept document or ID image uploads. Both were deliberately left for a later phase.
+No database — no login, no saved chat history, and no memory of earlier messages within a
+conversation. No document or ID image uploads through the UI. Both were deliberately deferred.

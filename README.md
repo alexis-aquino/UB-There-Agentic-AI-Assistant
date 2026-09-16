@@ -8,8 +8,11 @@ React (Vite)  ──HTTP──>  FastAPI  ──>  LangChain agent
                                             │
                                             └──> LlamaIndex query engine ──> ChromaDB
                                                           │
-                                                          └──> OpenAI (gpt-4o)
+                                       Ollama (free, local)  or  OpenAI (paid API)
 ```
+
+Documents go in **`upload uni info here/`**. The provider is chosen by `LLM_PROVIDER` in
+`backend/.env` — `ollama` (default, free) or `openai`.
 
 **New here? See [RUNNING.md](RUNNING.md)** for step-by-step setup and troubleshooting.
 
@@ -17,7 +20,7 @@ React (Vite)  ──HTTP──>  FastAPI  ──>  LangChain agent
 
 - Python 3.11+
 - Node.js 18+
-- An OpenAI API key
+- Ollama (free, local, default) — or an OpenAI API key to use the paid provider instead
 
 ## Backend
 
@@ -26,9 +29,9 @@ cd backend
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 
-Copy-Item .env.example .env   # then edit .env and add your OPENAI_API_KEY
+Copy-Item .env.example .env   # defaults to the free local provider
 
-.\.venv\Scripts\python.exe ingest.py    # builds the Chroma index from data/sample_docs
+.\.venv\Scripts\python.exe ingest.py    # indexes "upload uni info here/"
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
 ```
 
@@ -41,8 +44,7 @@ The API runs on http://localhost:8000 — interactive docs at http://localhost:8
 Quick check:
 
 ```powershell
-curl.exe -X POST localhost:8000/api/chat -H "Content-Type: application/json" `
-  -d '{\"message\":\"What is the tuition refund policy if I withdraw in week 3?\"}'
+curl.exe http://localhost:8000/api/health
 ```
 
 ## Frontend
@@ -56,12 +58,16 @@ npm run dev
 
 Open the printed URL (http://localhost:5173).
 
-## Using real documents
+## Using your documents
 
-`backend/data/sample_docs/` contains three placeholder policy files so the pipeline is
-testable out of the box. Replace them with real handbooks (`.txt`, `.md`, `.pdf`, `.docx`)
-and re-run `python ingest.py`. Each run rebuilds the collection from scratch, so there are
-no duplicate chunks.
+Put handbooks (`.pdf`, `.docx`, `.txt`, `.md`, `.csv`, `.pptx`) in `upload uni info here/` and re-run
+`ingest.py`. Each run rebuilds the collection from scratch, so re-running never duplicates chunks.
+
+## Switching providers
+
+Edit `backend/.env`, set `LLM_PROVIDER=openai` and `OPENAI_API_KEY=...`, re-run `ingest.py`, restart.
+Each provider has its own Chroma collection, since embedding dimensions differ — so switching back
+later needs no re-indexing.
 
 ## Deliberately not built yet
 

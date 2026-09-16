@@ -19,9 +19,19 @@ app.include_router(chat.router)
 
 
 @app.get("/api/health")
-async def health() -> dict:
+def health() -> dict:
+    from app.services.providers import ProviderNotReadyError, check_ready
+
+    try:
+        check_ready()
+        provider_ready, detail = True, "ready"
+    except ProviderNotReadyError as exc:
+        provider_ready, detail = False, str(exc)
+
     return {
         "status": "ok",
-        "openai_key_configured": bool(settings.openai_api_key),
-        "collection": settings.chroma_collection,
+        "provider": settings.llm_provider,
+        "provider_ready": provider_ready,
+        "detail": detail,
+        "collection": settings.collection_name,
     }
