@@ -59,15 +59,28 @@ def query_handbooks(question: str) -> str:
     if not nodes:
         return "No matching university documents were found for that question."
 
-    passages = []
-    for node in nodes:
-        name = node.metadata.get("file_name", "document")
-        page = node.metadata.get("page_label")
-        label = f"{name} p.{page}" if page else name
-        text = " ".join(node.text.split())
-        passages.append(f"[{label}]\n{text}")
+    return "\n\n".join(f"[{_label(node)}]\n{' '.join(node.text.split())}" for node in nodes)
 
-    return "\n\n".join(passages)
+
+def _label(node) -> str:
+    name = node.metadata.get("file_name", "document")
+    page = node.metadata.get("page_label")
+    return f"{name} p.{page}" if page else name
+
+
+def retrieve_scored(question: str) -> list[dict]:
+    """Retrieval with similarity scores, used to judge how well the documents cover a
+    question.
+
+    Deliberately a separate call rather than capturing scores during the agent's tool
+    use: LangGraph runs tools on its own threads, so a ContextVar set there never
+    reaches the request handler. Scoring the student's actual wording is also the more
+    meaningful signal, and one extra vector search is negligible beside the LLM call.
+    """
+    return [
+        {"label": _label(node), "score": float(node.score or 0.0)}
+        for node in get_retriever().retrieve(question)
+    ]
 
 
 def build_rag_tool() -> Tool:

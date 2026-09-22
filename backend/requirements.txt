@@ -1,7 +1,19 @@
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
 pydantic-settings>=2.4.0
-python-dotenv>=1.0.1
+python-multipart>=0.0.9
+
+# Admin dashboard: auth + relational storage
+sqlalchemy>=2.0.0
+passlib[bcrypt]>=1.7.4
+bcrypt<4.1
+python-jose[cryptography]>=3.3.0
+# For PostgreSQL, uncomment and set DATABASE_URL=postgresql+psycopg://...
+# psycopg[binary]>=3.2.0
+
+# Document auditing
+opencv-python>=4.10.0
+pytesseract>=0.3.13
 
 langchain>=0.3.0
 

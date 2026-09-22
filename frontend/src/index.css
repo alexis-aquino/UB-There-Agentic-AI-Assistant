@@ -1,33 +1,60 @@
+/* University of Batangas brand tokens.
+   Maroon was given by name only, so this hex is our choice — change it here. */
 :root {
+  --ub-maroon: #7a1220;
+  --ub-maroon-dark: #4e0b15;
+  --ub-gold: #ffc454;
+  --ub-white: #ffffff;
+  --ub-tundora: #404040;
+
   color-scheme: light dark;
-  --bg: #f6f7f9;
-  --panel: #ffffff;
-  --border: #d8dce2;
-  --text: #1b1f24;
-  --muted: #5c6670;
-  --accent: #2b5fd9;
-  --bubble-bot: #eef1f6;
+
+  --bg: #f4f1ee;
+  --panel: var(--ub-white);
+  --panel-raised: #fbfaf8;
+  --border: #e0d9d3;
+  --text: var(--ub-tundora);
+  --text-strong: #1f1f1f;
+  --muted: #7d7570;
+  --accent: var(--ub-maroon);
+  --focus: var(--ub-gold);
+  --bubble-bot: #f2eeea;
+  --danger-bg: #fdecec;
+  --danger-text: #9b1c1c;
+  --ok: #1d7a4c;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #16181d;
-    --panel: #1e2127;
-    --border: #333842;
-    --text: #e8eaed;
-    --muted: #9aa4b0;
-    --accent: #6b96ff;
-    --bubble-bot: #272c34;
+    --bg: #17120f;
+    --panel: #221b18;
+    --panel-raised: #2b221e;
+    --border: #3b2f2a;
+    --text: #ece7e3;
+    --text-strong: #ffffff;
+    --muted: #a99e97;
+    --accent: var(--ub-gold);
+    --bubble-bot: #2b2220;
+    --danger-bg: #3b1f1f;
+    --danger-text: #ffb4b4;
+    --ok: #6ee7a8;
   }
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input, textarea, select { font-family: inherit; }
+
+:where(button, input, textarea, select, [tabindex]):focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 6px;
 }
