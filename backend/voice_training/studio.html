@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Voice Studio — UB There backend</title>
+<style>
+  :root {
+    --bg: #f6f4f2; --surface: #fff; --sunk: #f1eeeb; --rule: #e4dfda;
+    --ink: #22201e; --muted: #6b645e; --accent: #7a1220; --accent-ink: #fff;
+    --ok: #2f7a4e; --bad: #9b1c1c;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161413; --surface: #1f1c1a; --sunk: #2a2623; --rule: #34302c;
+      --ink: #f1ece7; --muted: #a59d95; --accent: #f0b54d; --accent-ink: #231a0b;
+      --ok: #7fcf9c; --bad: #ffb4a8;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 "Segoe UI", sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  h2 { font-size: 1.1rem; margin: 0 0 6px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  section { background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; padding: 18px; margin-bottom: 18px; }
+  .hint { color: var(--muted); font-size: .88rem; margin: 6px 0; }
+  .bar { height: 6px; background: var(--sunk); border-radius: 99px; overflow: hidden; }
+  .bar span { display: block; height: 100%; background: var(--accent); width: 0; transition: width .3s; }
+  .meter { height: 4px; background: var(--sunk); margin: 0 0 12px; }
+  .meter span { display: block; height: 100%; background: var(--ok); width: 0; }
+  .meter span.clip { background: var(--bad); }
+  .count { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 10px 0 0; }
+  .count .done { color: var(--ok); text-transform: none; letter-spacing: 0; }
+  blockquote { margin: 8px 0 10px; padding: 16px 18px; border-left: 3px solid var(--accent); background: var(--sunk); border-radius: 0 10px 10px 0; font-size: 1.15rem; min-height: 3.4em; }
+  blockquote.live { border-left-color: var(--bad); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  button { font: inherit; font-size: .9rem; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--rule); background: var(--surface); color: var(--ink); cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  button.recording { background: var(--bad); border-color: var(--bad); color: #fff; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .status { font-size: .88rem; margin: 10px 0 0; color: var(--ok); }
+  .status.warn { color: var(--bad); }
+  code { background: var(--sunk); padding: 1px 5px; border-radius: 4px; }
+  details { margin-top: 14px; font-size: .88rem; color: var(--muted); }
+  summary { cursor: pointer; color: var(--ink); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Voice Studio</h1>
+  <p class="sub">Backend-only. Students never see this page — it only opens on the computer running the backend.</p>
+
+  <section id="trainer">
+    <h2>Train a voice (Piper)</h2>
+    <p class="hint">Read one handbook sentence per clip. <strong>Space</strong> starts and stops, <strong>←/→</strong> move, <strong>P</strong> plays the clip. A clean take saves and moves on by itself.</p>
+    <div class="bar"><span id="progress"></span></div>
+    <p class="hint" id="totals">Loading prompts…</p>
+    <p class="count" id="position"></p>
+    <blockquote id="prompt"></blockquote>
+    <div class="meter"><span id="meter"></span></div>
+    <div class="row">
+      <button class="primary" id="record">Record (Space)</button>
+      <button id="prev">← Previous</button>
+      <button id="next">Skip →</button>
+      <button id="play">Play (P)</button>
+      <button id="delete">Delete</button>
+    </div>
+    <p class="status" id="notice" hidden></p>
+    <details>
+      <summary>Tips for a good voice</summary>
+      <ul>
+        <li>Quiet room, same mic, same distance (a hand's width) every session.</li>
+        <li>Read exactly what is written, in the calm, friendly tone you want the assistant to have.</li>
+        <li>Keep the level bar mostly in the middle. Red means clipping: back off.</li>
+        <li>Short sessions are fine; progress is saved after every clip.</li>
+      </ul>
+    </details>
+    <p class="hint" id="ready" hidden>Enough to train. In PowerShell, in the backend folder: <code>wsl bash voice_training/train.sh</code> (setup steps are in RUNNING.md).</p>
+  </section>
+
+  <section>
+    <h2>Instant clone sample (XTTS)</h2>
+    <p class="hint">Optional: XTTS copies a voice from one ~30-second clip. Read this aloud, then set <code>VOICE_PROVIDER=xtts</code> in <code>backend/.env</code>.</p>
+    <blockquote id="script">Hello, I am the University of Batangas student assistant. I can answer questions about grading, attendance, enrolment and tuition. Please ask me anything you need to know about the student handbook, and I will look it up for you.</blockquote>
+    <div class="row"><button class="primary" id="sample">Start recording</button><span class="hint" id="sampleTime"></span></div>
+    <p class="status" id="sampleNotice" hidden></p>
+  </section>
+</main>
+
+<script>
+const SAMPLE_RATE = 22050, CLIPPING = 0.98, QUIET = 0.1;
+const DATASET = '/api/voice/dataset';
+const $ = (id) => document.getElementById(id);
+
+// ---------- microphone + clip encoding (22,050 Hz mono 16-bit, silence trimmed) ----------
+let stream = null, recorder = null, chunks = [], meterFrame = 0;
+
+async function openMic() {
+  if (stream) return stream;
+  // Processing is off: echo cancellation and auto gain would be learned as part of the voice.
+  stream = await navigator.mediaDevices.getUserMedia({ audio: {
+    channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+  const ctx = new AudioContext();
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 1024;
+  ctx.createMediaStreamSource(stream).connect(analyser);
+  const buf = new Float32Array(analyser.fftSize);
+  const tick = () => {
+    analyser.getFloatTimeDomainData(buf);
+    let peak = 0;
+    for (const v of buf) peak = Math.max(peak, Math.abs(v));
+    const bar = $('meter');
+    bar.style.width = `${Math.min(peak, 1) * 100}%`;
+    bar.classList.toggle('clip', peak >= CLIPPING);
+    meterFrame = requestAnimationFrame(tick);
+  };
+  tick();
+  return stream;
+}
+
+async function startRecording() {
+  const s = await openMic();
+  recorder = new MediaRecorder(s);
+  chunks = [];
+  recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+  recorder.start();
+}
+
+function stopRecording() {
+  return new Promise((resolve, reject) => {
+    if (!recorder || recorder.state === 'inactive') return resolve(null);
+    recorder.onstop = async () => {
+      try { resolve(await toClip(new Blob(chunks, { type: recorder.mimeType }))); }
+      catch (err) { reject(err); }
+    };
+    recorder.stop();
+  });
+}
+
+async function toClip(blob) {
+  const ctx = new AudioContext();
+  let decoded;
+  try { decoded = await ctx.decodeAudioData(await blob.arrayBuffer()); } finally { ctx.close(); }
+  const length = Math.max(1, Math.ceil(decoded.duration * SAMPLE_RATE));
+  const offline = new OfflineAudioContext(1, length, SAMPLE_RATE);
+  const src = offline.createBufferSource();
+  src.buffer = decoded; src.connect(offline.destination); src.start();
+  const samples = trim((await offline.startRendering()).getChannelData(0));
+  let peak = 0;
+  for (const v of samples) peak = Math.max(peak, Math.abs(v));
+  return { wav: encodeWav(samples), seconds: samples.length / SAMPLE_RATE, peak };
+}
+
+function trim(samples) {
+  const size = Math.round(0.02 * SAMPLE_RATE), count = Math.floor(samples.length / size);
+  if (!count) return samples;
+  const rms = new Float32Array(count);
+  for (let w = 0; w < count; w++) {
+    let sum = 0;
+    for (let i = w * size; i < (w + 1) * size; i++) sum += samples[i] * samples[i];
+    rms[w] = Math.sqrt(sum / size);
+  }
+  const threshold = Math.max(0.006, Math.max(...rms) * 0.08);
+  // Speech must stay loud 3 windows running; a key or mouse click is one spike.
+  const sustained = (w, step) => {
+    for (let k = 0; k < 3; k++) { const i = w + k * step; if (i < 0 || i >= count || rms[i] < threshold) return false; }
+    return true;
+  };
+  let first = 0; while (first < count && !sustained(first, 1)) first++;
+  let last = count - 1; while (last > first && !sustained(last, -1)) last--;
+  if (first >= count) return new Float32Array(0);
+  const begin = Math.max(0, first * size - Math.round(0.15 * SAMPLE_RATE));
+  const end = Math.min(samples.length, (last + 1) * size + Math.round(0.25 * SAMPLE_RATE));
+  return samples.slice(begin, end);
+}
+
+function encodeWav(samples) {
+  const buffer = new ArrayBuffer(44 + samples.length * 2), view = new DataView(buffer);
+  const text = (o, v) => { for (let i = 0; i < v.length; i++) view.setUint8(o + i, v.charCodeAt(i)); };
+  text(0, 'RIFF'); view.setUint32(4, 36 + samples.length * 2, true); text(8, 'WAVE'); text(12, 'fmt ');
+  view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+  view.setUint32(24, SAMPLE_RATE, true); view.setUint32(28, SAMPLE_RATE * 2, true);
+  view.setUint16(32, 2, true); view.setUint16(34, 16, true); text(36, 'data');
+  view.setUint32(40, samples.length * 2, true);
+  for (let i = 0; i < samples.length; i++) {
+    const v = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(44 + i * 2, v < 0 ? v * 0x8000 : v * 0x7fff, true);
+  }
+  return new Blob([buffer], { type: 'audio/wav' });
+}
+
+// ---------- training clips ----------
+let data = null, position = 0, recording = false, busy = false, audio = null;
+
+function notice(text, warn = false) {
+  const el = $('notice');
+  el.hidden = !text; el.textContent = text || ''; el.classList.toggle('warn', warn);
+}
+
+function render() {
+  if (!data) return;
+  const prompts = data.prompts, current = prompts[position];
+  const progress = Math.min(data.seconds / data.target_seconds, 1);
+  $('progress').style.width = `${progress * 100}%`;
+  $('totals').textContent = `${data.recorded} of ${data.total} clips · ${(data.seconds / 60).toFixed(1)} of ${(data.target_seconds / 60).toFixed(1)} min`;
+  $('position').innerHTML = `Sentence ${position + 1} of ${prompts.length}` +
+    (current?.recorded ? ` <span class="done">· recorded ${current.seconds.toFixed(1)} s</span>` : '');
+  $('prompt').textContent = current?.text ?? '';
+  $('prompt').classList.toggle('live', recording);
+  $('record').textContent = recording ? 'Stop (Space)' : current?.recorded ? 'Redo (Space)' : 'Record (Space)';
+  $('record').classList.toggle('recording', recording);
+  $('record').disabled = busy;
+  $('prev').disabled = recording || position === 0;
+  $('next').disabled = recording || position >= prompts.length - 1;
+  $('play').disabled = $('delete').disabled = recording || !current?.recorded;
+  $('ready').hidden = data.seconds < data.target_seconds;
+}
+
+function refreshTotals() {
+  data.recorded = data.prompts.filter((p) => p.recorded).length;
+  data.seconds = data.prompts.reduce((sum, p) => sum + p.seconds, 0);
+}
+
+async function load() {
+  const res = await fetch(DATASET);
+  const body = await res.json();
+  if (!res.ok) { $('totals').textContent = body.detail ?? 'Could not load prompts.'; return; }
+  data = body;
+  const next = data.prompts.findIndex((p) => !p.recorded);
+  position = next === -1 ? 0 : next;
+  render();
+}
+
+function go(delta) {
+  position = Math.min(Math.max(position + delta, 0), Math.max(data.prompts.length - 1, 0));
+  render();
+}
+
+async function toggle() {
+  if (busy || !data) return;
+  if (!recording) {
+    notice(null);
+    try { await startRecording(); recording = true; }
+    catch (err) { notice(err.name === 'NotAllowedError' ? 'Microphone access was denied.' : err.message, true); }
+    return render();
+  }
+  recording = false; busy = true; render();
+  const current = data.prompts[position];
+  try {
+    const clip = await stopRecording();
+    if (!clip) return;
+    if (clip.seconds < 0.6) return notice("I didn't catch any speech in that take. Check the mic and try again.", true);
+    const form = new FormData();
+    form.append('file', clip.wav, `${current.id}.wav`);
+    const res = await fetch(`${DATASET}/${current.id}`, { method: 'POST', body: form });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.detail ?? 'Upload failed');
+    Object.assign(current, { recorded: true, seconds: body.seconds });
+    refreshTotals();
+    if (clip.peak >= CLIPPING) notice('Saved, but it clipped (too loud). Move back a little and redo it.', true);
+    else if (clip.peak < QUIET) notice('Saved, but it is very quiet. Move closer to the mic and redo it.', true);
+    else {
+      notice(`Saved ${body.seconds.toFixed(1)} s.`);
+      const next = data.prompts.findIndex((p, i) => i > position && !p.recorded);
+      position = next === -1 ? Math.min(position + 1, data.prompts.length - 1) : next;
+    }
+  } catch (err) { notice(err.message, true); }
+  finally { busy = false; render(); }
+}
+
+function play() {
+  const current = data?.prompts[position];
+  if (!current?.recorded) return;
+  audio?.pause();
+  audio = new Audio(`${DATASET}/${current.id}/audio?t=${Date.now()}`);
+  audio.play().catch(() => {});
+}
+
+async function remove() {
+  const current = data?.prompts[position];
+  if (!current?.recorded || recording) return;
+  await fetch(`${DATASET}/${current.id}`, { method: 'DELETE' });
+  Object.assign(current, { recorded: false, seconds: 0 });
+  refreshTotals(); notice('Clip deleted.'); render();
+}
+
+$('record').onclick = toggle;
+$('prev').onclick = () => go(-1);
+$('next').onclick = () => go(1);
+$('play').onclick = play;
+$('delete').onclick = remove;
+
+window.addEventListener('keydown', (e) => {
+  if (e.repeat || e.target.closest('input, textarea') || sampling) return;
+  if (e.code === 'Space') { e.preventDefault(); document.activeElement?.blur(); toggle(); }
+  else if (!recording && e.key === 'ArrowRight') go(1);
+  else if (!recording && e.key === 'ArrowLeft') go(-1);
+  else if (!recording && e.key.toLowerCase() === 'p') play();
+});
+
+// ---------- XTTS reference sample ----------
+let sampling = false, sampleTimer = 0, sampleStart = 0;
+
+$('sample').onclick = async () => {
+  const button = $('sample'), status = $('sampleNotice');
+  if (!sampling) {
+    try { await startRecording(); } catch (err) { status.hidden = false; status.className = 'status warn'; status.textContent = err.message; return; }
+    sampling = true; sampleStart = Date.now();
+    button.textContent = 'Stop recording'; button.classList.add('recording');
+    sampleTimer = setInterval(() => {
+      const s = Math.round((Date.now() - sampleStart) / 1000);
+      $('sampleTime').textContent = s < 20 ? `${s}s — keep going, aim for at least 20 seconds` : `${s}s`;
+    }, 250);
+    return;
+  }
+  sampling = false; clearInterval(sampleTimer);
+  button.textContent = 'Start recording'; button.classList.remove('recording');
+  const clip = await stopRecording();
+  if (!clip) return;
+  const form = new FormData();
+  form.append('file', clip.wav, 'my_voice.wav');
+  const res = await fetch('/api/voice/sample', { method: 'POST', body: form });
+  const body = await res.json();
+  status.hidden = false;
+  status.className = res.ok ? 'status' : 'status warn';
+  status.textContent = res.ok ? `Saved ${clip.seconds.toFixed(1)} s. ${body.note}` : body.detail;
+};
+
+load();
+</script>
+</body>
+</html>

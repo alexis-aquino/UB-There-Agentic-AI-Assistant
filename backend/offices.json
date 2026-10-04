@@ -1,0 +1,35 @@
+{
+  "_note": "PLACEHOLDERS — replace each email with the office's real address before setting MAIL_MODE=smtp. 'keywords' decide which office the app suggests for a question; the student can always pick another.",
+  "offices": [
+    {
+      "id": "registrar",
+      "name": "Registrar's Office",
+      "email": "registrar@example.com",
+      "keywords": ["enroll", "enrollment", "enrolment", "unit", "overload", "subject", "drop", "add", "transcript", "tor", "grade", "record", "diploma", "graduation", "schedule", "examination", "exam", "shift", "transfer", "credit"]
+    },
+    {
+      "id": "accounting",
+      "name": "Accounting / Cashier",
+      "email": "accounting@example.com",
+      "keywords": ["tuition", "fee", "fees", "payment", "pay", "balance", "refund", "installment", "downpayment", "cashier", "receipt", "assessment"]
+    },
+    {
+      "id": "scholarships",
+      "name": "Scholarship Office",
+      "email": "scholarships@example.com",
+      "keywords": ["scholarship", "scholar", "grant", "discount", "financial", "aid", "allowance"]
+    },
+    {
+      "id": "student-affairs",
+      "name": "Office of Student Affairs",
+      "email": "student.affairs@example.com",
+      "keywords": ["uniform", "id", "conduct", "discipline", "violation", "sanction", "organization", "club", "event", "dress", "hair", "earring", "absence", "absent", "attendance", "late"]
+    },
+    {
+      "id": "guidance",
+      "name": "Guidance Office",
+      "email": "guidance@example.com",
+      "keywords": ["counseling", "counselling", "guidance", "stress", "mental", "career", "personal", "bullying"]
+    }
+  ]
+}

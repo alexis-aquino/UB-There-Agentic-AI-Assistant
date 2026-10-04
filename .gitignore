@@ -4,8 +4,19 @@ venv/
 __pycache__/
 *.pyc
 
-backend/chroma_db/
+backend/index/
+backend/brain_memory.db
+backend/source_cache/
+backend/users.db
+# Student questions and the emails about them
+backend/tickets.db
+backend/outbox/
 
 node_modules/
 dist/
 .vite/
+backend/voice_cache/
+backend/voice_models/
+
+# Your voice recordings (personal data) and training output
+backend/voice_dataset/

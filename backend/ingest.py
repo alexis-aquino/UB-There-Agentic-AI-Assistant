@@ -1,57 +1,68 @@
-"""Build the ChromaDB vector index from the documents in the upload folder.
+r"""Build the knowledge base from the documents in 'upload uni info here'.
 
-Run this once before starting the API, and again whenever the documents change:
-    .\\.venv\\Scripts\\python.exe ingest.py
+Two indexes over the same passages: a keyword index (exact handbook terms) and a LlamaIndex
+vector index stored in ChromaDB (meaning, embedded by nomic-embed-text in Ollama). Ollama must
+be running.
+
+Run after adding or changing documents:
+    .\.venv\Scripts\python.exe ingest.py
 """
 
 import sys
+import time
 
-import chromadb
-from llama_index.core import SimpleDirectoryReader, StorageContext, VectorStoreIndex
-from llama_index.vector_stores.chroma import ChromaVectorStore
-
+from app.brain import vectors
+from app.brain.bm25 import BM25Index
+from app.brain.chunker import chunk_pages
+from app.brain.engine import fingerprint_of, index_path
+from app.brain.llm import ModelUnavailableError, check_models
+from app.brain.readers import SUPPORTED, read_folder
 from app.config import get_settings
-from app.services.providers import ProviderNotReadyError, check_ready
-from app.services.rag_engine import configure_llama_index
 
 
 def main() -> int:
     settings = get_settings()
 
     try:
-        check_ready()
-    except ProviderNotReadyError as exc:
+        check_models()
+    except ModelUnavailableError as exc:
         print(exc)
         return 1
 
-    if not settings.docs_dir.exists() or not any(settings.docs_dir.iterdir()):
-        print(f"No documents found in {settings.docs_dir}. Add PDFs or text files there first.")
+    if not settings.docs_dir.exists():
+        print(f"Folder not found: {settings.docs_dir}")
         return 1
 
-    configure_llama_index()
-    # README.md is instructions for whoever drops files in, not university content.
-    documents = SimpleDirectoryReader(str(settings.docs_dir), exclude=["README.md"]).load_data()
-    if not documents:
-        print(f"Only the README is in {settings.docs_dir}. Add university documents there first.")
+    pages = read_folder(settings.docs_dir, exclude={"README.md"})
+    if not pages:
+        print(
+            f"No readable documents in {settings.docs_dir}.\n"
+            f"Supported types: {', '.join(sorted(SUPPORTED))}"
+        )
         return 1
-    print(f"Loaded {len(documents)} document(s) from {settings.docs_dir}")
 
-    settings.chroma_dir.mkdir(parents=True, exist_ok=True)
-    client = chromadb.PersistentClient(path=str(settings.chroma_dir))
-    collection = client.get_or_create_collection(settings.collection_name)
+    files = sorted({page.source for page in pages})
+    print(f"Read {len(pages)} page(s) from {len(files)} file(s): {', '.join(files)}")
 
-    # Re-ingesting into a populated collection would duplicate nodes, so start clean.
-    existing_ids = collection.get(include=[])["ids"]
-    if existing_ids:
-        collection.delete(ids=existing_ids)
-        print(f"Cleared {len(existing_ids)} existing chunk(s).")
+    chunks = chunk_pages(pages)
+    index = BM25Index()
+    for chunk in chunks:
+        index.add(chunk)
+    index.finalize()
 
-    print(f"Embedding with {settings.llm_provider}… this can take a minute on first run.")
-    vector_store = ChromaVectorStore(chroma_collection=collection)
-    storage_context = StorageContext.from_defaults(vector_store=vector_store)
-    VectorStoreIndex.from_documents(documents, storage_context=storage_context)
+    path = index_path()
+    index.save(path)
 
-    print(f"Indexed {collection.count()} chunk(s) into '{settings.collection_name}'.")
+    print(f"Keyword index: {len(index.chunks)} passages, {len(index.postings)} terms -> {path}")
+
+    print(f"Embedding {len(index.chunks)} passages with {settings.ollama_embed_model}...")
+    started = time.perf_counter()
+    vectors.build(index.chunks, fingerprint_of(path))
+    print(
+        f"ChromaDB collection '{vectors.collection_name()}' -> {vectors.chroma_dir()} "
+        f"({time.perf_counter() - started:.0f} s)"
+    )
+    print("Restart the backend to use the new knowledge base.")
     return 0
 
 

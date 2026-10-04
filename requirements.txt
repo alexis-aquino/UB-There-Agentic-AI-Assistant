@@ -1,0 +1,23 @@
+# UB There — Python packages. How to install: see STEPS TO RUN.md
+
+# Web server and API
+fastapi==0.141.1
+uvicorn[standard]==0.53.0
+python-multipart==0.0.32
+pydantic-settings==2.15.0
+
+# Reading the handbook (PDF / Word) and picturing its pages
+pypdf==6.19.0
+python-docx==1.2.0
+pymupdf==1.28.2
+
+# AI: LlamaIndex with Ollama (and the OpenAI switch), ChromaDB for search
+llama-index-core==0.14.25
+llama-index-llms-ollama==0.11.0
+llama-index-embeddings-ollama==0.10.0
+llama-index-llms-openai==0.8.2
+chromadb==1.5.9
+llama-index-vector-stores-chroma==0.6.0
+
+# The AI voices
+piper-tts==1.8.0

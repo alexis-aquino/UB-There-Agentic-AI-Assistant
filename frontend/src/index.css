@@ -1,25 +1,5 @@
-:root {
-  color-scheme: light dark;
-  --bg: #f6f7f9;
-  --panel: #ffffff;
-  --border: #d8dce2;
-  --text: #1b1f24;
-  --muted: #5c6670;
-  --accent: #2b5fd9;
-  --bubble-bot: #eef1f6;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #16181d;
-    --panel: #1e2127;
-    --border: #333842;
-    --text: #e8eaed;
-    --muted: #9aa4b0;
-    --accent: #6b96ff;
-    --bubble-bot: #272c34;
-  }
-}
+/* Shared base. The design (src/designs/handbook.css) defines the tokens used here —
+   colors, fonts, spacing. */
 
 * {
   box-sizing: border-box;
@@ -27,7 +7,74 @@
 
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background-color: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: var(--step-0);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input {
+  font-family: inherit;
+}
+
+:where(button, input, a, [tabindex]):focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+
+/* Shared motion. */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* An answer is "set" onto the page: it unrolls from the top edge. */
+@keyframes set-in {
+  from {
+    opacity: 0;
+    clip-path: inset(0 0 100% 0);
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+    transform: none;
+  }
+}
+
+/* The avatar placeholder while speaking. */
+@keyframes breathe {
+  50% { transform: scale(1.015); }
+}
+
+@keyframes pulse {
+  50% { opacity: 0.35; }
+}
+
+@keyframes sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

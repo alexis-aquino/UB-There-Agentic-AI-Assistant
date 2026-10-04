@@ -5,15 +5,18 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:phone": "vite --host",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "three": "^0.186.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
+    "postcss-nesting": "^14.0.2",
     "vite": "^5.4.0"
   },
   "allowScripts": {

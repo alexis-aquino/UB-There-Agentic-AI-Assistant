@@ -1,0 +1,24 @@
+.mascot3d {
+  width: 100%;
+  height: 260px;
+  display: block;
+  transition: filter 220ms ease;
+}
+
+.mascot3d.is-speaking {
+  filter: drop-shadow(0 6px 18px rgba(255, 196, 84, 0.35));
+}
+
+.mascot3d.is-thinking {
+  filter: drop-shadow(0 6px 14px rgba(122, 18, 32, 0.28));
+}
+
+.mascot3d canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+@media (max-width: 720px) {
+  .mascot3d { height: 200px; }
+}

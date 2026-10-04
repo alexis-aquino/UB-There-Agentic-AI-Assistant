@@ -1,0 +1,4 @@
+# Optional: clone your own voice with XTTS v2 (zero-shot, no training run).
+# Large install — pulls PyTorch (~2.5 GB). Needs ~4 GB VRAM; a 6 GB card is enough.
+# XTTS v2 weights are licensed NON-COMMERCIAL: fine for coursework, not for resale.
+coqui-tts>=0.27.0
