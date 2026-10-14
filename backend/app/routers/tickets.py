@@ -8,11 +8,11 @@ from fastapi.responses import HTMLResponse
 from app import mail
 from app.auth.store import User
 from app.config import get_settings
-from app.routers.auth import current_user, get_store
-from app.schemas import OfficeList, TicketCreate, TicketOut
+from app.routers.auth import current_user, get_store, require_role
+from app.schemas import OfficeList, StaffTicketOut, TicketAnswer, TicketCreate, TicketOut
 from app.tickets.offices import get_office, load_offices, suggest_office
 from app.tickets.pages import answer_page, not_found_page
-from app.tickets.store import Ticket, TicketStore
+from app.tickets.store import Ticket, TicketStore, parse_ref
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +85,19 @@ You can also see it under "My questions" in UB There: {base}/
     return subject, body
 
 
+def _save_answer(ticket: Ticket, student: User | None, answer: str, answered_by: str) -> Ticket:
+    """Store the office's answer and tell the student, from the email link or the dashboard."""
+    ticket = get_tickets().answer(ticket.id, answer, answered_by)
+    # Email only verified addresses (Google sign-in): a guest's address was never checked,
+    # so the app must not send mail to it. Guests see the answer in the app.
+    if student and student.google_linked:
+        try:
+            mail.send(student.email, *_student_email(ticket))
+        except mail.MailError:
+            logger.warning("Could not email %s about %s; the answer is still in the app.", student.id, ticket.ref)
+    return ticket
+
+
 @router.get("/api/offices", response_model=OfficeList)
 def offices(question: str = "") -> OfficeList:
     return OfficeList(
@@ -152,14 +165,34 @@ def submit_answer(
         return HTMLResponse(
             answer_page(ticket, student_name, t, error="Please write an answer first."), status_code=400
         )
-    ticket = store.answer(ticket.id, answer, answered_by.strip()[:80])
-
-    # Email only verified addresses (Google sign-in): a guest's address was never checked,
-    # so the app must not send mail to it. Guests see the answer in the app.
-    if student and student.google_linked:
-        try:
-            mail.send(student.email, *_student_email(ticket))
-        except mail.MailError:
-            logger.warning("Could not email %s about %s; the answer is still in the app.", student.id, ticket.ref)
-
+    ticket = _save_answer(ticket, student, answer, answered_by.strip()[:80])
     return HTMLResponse(answer_page(ticket, student_name, t, saved=True))
+
+
+# ---------- department dashboard: office staff answer in the app ----------
+
+
+def _staff_out(ticket: Ticket) -> StaffTicketOut:
+    student = get_store().get(ticket.user_id)
+    return StaffTicketOut(
+        **_out(ticket).model_dump(), student_name=student.name if student else "A former student"
+    )
+
+
+@router.get("/api/department/tickets", response_model=list[StaffTicketOut])
+def office_tickets(user: User = Depends(require_role("department"))) -> list[StaffTicketOut]:
+    return [_staff_out(ticket) for ticket in get_tickets().for_office(user.office_id)]
+
+
+@router.post("/api/department/tickets/{ref}/answer", response_model=StaffTicketOut)
+def answer_ticket(
+    ref: str, body: TicketAnswer, user: User = Depends(require_role("department"))
+) -> StaffTicketOut:
+    ticket_id = parse_ref(ref)
+    ticket = get_tickets().get(ticket_id) if ticket_id is not None else None
+    # Another office's question looks the same as a missing one: staff see only their own.
+    if ticket is None or ticket.office_id != user.office_id:
+        raise HTTPException(status_code=404, detail="Your office has no question with that reference.")
+    student = get_store().get(ticket.user_id)
+    ticket = _save_answer(ticket, student, body.answer, body.answered_by.strip() or user.name)
+    return _staff_out(ticket)

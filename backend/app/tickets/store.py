@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS tickets (
     answered_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_tickets_user ON tickets(user_id);
+CREATE INDEX IF NOT EXISTS idx_tickets_office ON tickets(office_id);
 """
 
 
@@ -120,6 +121,13 @@ class TicketStore:
         with self._lock:
             rows = self._connection.execute(
                 "SELECT * FROM tickets WHERE user_id = ? ORDER BY id DESC", (user_id,)
+            ).fetchall()
+        return [Ticket.from_row(row) for row in rows]
+
+    def for_office(self, office_id: str) -> list[Ticket]:
+        with self._lock:
+            rows = self._connection.execute(
+                "SELECT * FROM tickets WHERE office_id = ? ORDER BY id DESC", (office_id,)
             ).fetchall()
         return [Ticket.from_row(row) for row in rows]
 

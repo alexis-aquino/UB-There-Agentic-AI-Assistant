@@ -73,6 +73,7 @@ class UserOut(BaseModel):
     # student | department | admin. Department accounts belong to one office.
     role: str = "student"
     office_id: str | None = None
+    office_name: str | None = None
 
 
 class AuthResponse(BaseModel):
@@ -119,3 +120,24 @@ class TicketOut(BaseModel):
     answered_by: str | None = None
     created_at: str | None = None
     answered_at: str | None = None
+
+
+class StaffTicketOut(TicketOut):
+    """A ticket as office staff see it on the department dashboard."""
+
+    student_name: str
+
+
+class TicketAnswer(BaseModel):
+    answer: str = Field(min_length=1, max_length=5000)
+    # Shown to the student; empty = the staff member's own name.
+    answered_by: str = Field(default="", max_length=80)
+
+    @field_validator("answer", mode="before")
+    @classmethod
+    def strip_answer(cls, value: object) -> object:
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                raise ValueError("Please write an answer first.")
+        return value

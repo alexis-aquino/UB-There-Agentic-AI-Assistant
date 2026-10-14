@@ -8,6 +8,7 @@ from app.auth.google import GoogleTokenError, verify_id_token
 from app.auth.security import issue_token, read_token
 from app.auth.store import EmailTakenError, User, UserStore
 from app.config import get_settings
+from app.tickets.offices import get_office
 from app.schemas import (
     AuthConfig,
     AuthResponse,
@@ -33,7 +34,10 @@ def _in_domain(email: str) -> bool:
 
 
 def _user_out(user: User) -> UserOut:
-    return UserOut(**asdict(user), guest=not _in_domain(user.email))
+    office = get_office(user.office_id) if user.office_id else None
+    return UserOut(
+        **asdict(user), guest=not _in_domain(user.email), office_name=office.name if office else None
+    )
 
 
 def _session(user: User, created: bool = False) -> AuthResponse:

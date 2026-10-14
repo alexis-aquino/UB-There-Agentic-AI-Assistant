@@ -152,7 +152,9 @@ it, **Admin / Guest login** (`#/guest`) is the email-and-password door, with gue
   .\.venv\Scripts\python.exe set_role.py someone@ub.edu.ph student
   ```
 
-  Roles are what the admin and department dashboards will check; the dashboards aren't built yet.
+  A **department** account signs in to its office's **questions desk** instead of the chat: the
+  questions students sent that office, waiting ones first, answered right there (the email answer
+  link keeps working too). The admin dashboard isn't built yet.
 
 ## Asking an office
 

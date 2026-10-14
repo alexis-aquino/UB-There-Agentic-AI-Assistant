@@ -69,5 +69,6 @@ cloned voice; weights are **non-commercial**), or `off`.
 ## Not built yet
 
 Accounts exist (email/password and Google, see [RUNNING.md](RUNNING.md)), and asking questions
-needs a signed-in account. Accounts have roles (student, department, admin), but no administrator or
-department dashboards use them yet, and there is no document-audit (DFD process 4.0).
+needs a signed-in account. Accounts have roles (student, department, admin). Department staff get a
+questions desk for their office; there is no administrator dashboard yet, and no document-audit (DFD
+process 4.0).
