@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     memory_db: Path = BACKEND_ROOT / "brain_memory.db"
     # Rendered pictures of source pages (see app/sources.py); safe to delete any time.
     source_cache_dir: Path = BACKEND_ROOT / "source_cache"
+    # The audit log of document changes made from the admin dashboard (DFD process 4.0).
+    documents_db: Path = BACKEND_ROOT / "documents.db"
 
     # --- AI model (LlamaIndex) ---
     # Who writes the replies: "ollama" (local, free), "openai" (API, needs a key), or "mock"

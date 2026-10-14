@@ -13,6 +13,7 @@ import pytest
 _TMP = Path(tempfile.mkdtemp(prefix="ub_there_tests_"))
 os.environ["MEMORY_DB"] = str(_TMP / "brain_memory.db")  # never touch the real memory
 os.environ["TICKETS_DB"] = str(_TMP / "tickets.db")
+os.environ["DOCUMENTS_DB"] = str(_TMP / "documents.db")  # the document audit log
 os.environ["MAIL_OUTBOX_DIR"] = str(_TMP / "outbox")  # MAIL_MODE defaults to log: nothing is sent
 os.environ["SOURCE_CACHE_DIR"] = str(_TMP / "source_cache")
 os.environ["USERS_DB"] = str(_TMP / "users.db")  # never touch real accounts

@@ -164,7 +164,17 @@ it, **Admin / Guest login** (`#/guest`) is the email-and-password door, with gue
   - **Accounts** — every account with its role; change a role (and a department's office) there
     instead of with `set_role.py`. You can't remove your own admin role.
 
-  Trends count questions from when this feature was added; older chats aren't in them.
+  - **Documents** (the document audit, DFD 4.0) — every file in `upload uni info here/` with
+    whether the search index has it: *in the index*, *changed*, *new*, or *deleted*. Add or replace
+    files (.pdf, .docx, .txt, .md, up to 50 MB), delete them, then **Rebuild index**: it runs in the
+    background and the assistant uses the new handbook straight away — no `ingest.py`, no restart.
+    While it runs (about as long as `ingest.py` takes) students are asked to try again in a
+    minute. The **change log** records who added, replaced or deleted what, and every rebuild; it is
+    kept in `backend/documents.db`.
+
+  Trends count questions from when this feature was added; older chats aren't in them. An index
+  built by an older `ingest.py` has no record of which file versions it read, so the Documents tab
+  asks for one rebuild before it can show what changed.
 
 ## Asking an office
 

@@ -5,6 +5,7 @@ from collections.abc import Iterator
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
+from app import documents
 from app.auth.store import User
 from app.brain import engine
 from app.brain.engine import BrainNotReadyError, ModelUnavailableError
@@ -19,6 +20,11 @@ router = APIRouter(prefix="/api", tags=["chat"])
 
 def _ready() -> None:
     """Raise a clean 503 before streaming starts, rather than an error mid-reply."""
+    # The indexes are being replaced; searching them half-built would give wrong answers.
+    if documents.is_rebuilding():
+        raise HTTPException(
+            status_code=503, detail="The handbook is being updated. Please ask again in a minute."
+        )
     try:
         engine.load()
         check_models()

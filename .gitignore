@@ -10,6 +10,8 @@ backend/source_cache/
 backend/users.db
 # Student questions and the emails about them
 backend/tickets.db
+# Who changed which handbook document (admin dashboard)
+backend/documents.db
 backend/outbox/
 
 node_modules/

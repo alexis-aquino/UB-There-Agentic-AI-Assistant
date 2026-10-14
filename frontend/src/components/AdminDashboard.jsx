@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../api.js';
 import AccountPanel from './AccountPanel.jsx';
+import AdminDocuments from './AdminDocuments.jsx';
 import ThemeToggle from './ThemeToggle.jsx';
 
 const RANGES = [7, 14, 30];
@@ -419,6 +420,7 @@ export default function AdminDashboard({ auth, theme, onOpenAssistant }) {
           {[
             ['overview', 'Overview'],
             ['accounts', 'Accounts'],
+            ['documents', 'Documents'],
           ].map(([id, label]) => (
             <button
               key={id}
@@ -432,7 +434,9 @@ export default function AdminDashboard({ auth, theme, onOpenAssistant }) {
             </button>
           ))}
         </div>
-        {tab === 'overview' ? <Overview token={token} /> : <Accounts token={token} selfId={user.id} />}
+        {tab === 'overview' && <Overview token={token} />}
+        {tab === 'accounts' && <Accounts token={token} selfId={user.id} />}
+        {tab === 'documents' && <AdminDocuments token={token} />}
       </section>
     </div>
   );

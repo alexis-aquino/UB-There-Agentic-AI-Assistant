@@ -66,9 +66,11 @@ cloned voice; weights are **non-commercial**), or `off`.
   model (e.g. `OLLAMA_MODEL=llama3.1:8b`) is more careful but slower.
 - **Tables in PDFs** stay hard to read — text extraction flattens them.
 
-## Not built yet
+## Accounts and dashboards
 
 Accounts exist (email/password and Google, see [RUNNING.md](RUNNING.md)), and asking questions
 needs a signed-in account. Accounts have roles (student, department, admin). Department staff get a
-questions desk for their office, and admins a dashboard (inquiry trends, handbook gaps, office
-workload, account roles). There is no document-audit yet (DFD process 4.0).
+questions desk for their office. Admins get a dashboard: inquiry trends, handbook gaps, office
+workload, account roles, and the **document audit** (DFD process 4.0): the handbook files, whether
+the index has each one, upload / replace / delete, a rebuild without restarting, and a change log
+of who did what (`app/documents.py`, `app/brain/build.py`).
