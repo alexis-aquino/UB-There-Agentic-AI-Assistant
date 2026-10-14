@@ -141,6 +141,18 @@ it, **Admin / Guest login** (`#/guest`) is the email-and-password door, with gue
 
   Google only allows plain-http sign-in from `localhost`, so the Google button works on the PC
   but not on a phone opening `http://192.168.x.x:5273` — guests' email sign-in works there.
+- **Sign-in is required** for asking questions and for the AI voice, not just to open the app.
+- **Roles.** Every account starts as a **student** (guests too). An account can also be
+  **department** staff of one office (an `id` from `backend/offices.json`) or an **admin**. Set
+  a role from `backend/` — the account must exist first:
+
+  ```
+  .\.venv\Scripts\python.exe set_role.py admin@ub.edu.ph admin
+  .\.venv\Scripts\python.exe set_role.py registrar@ub.edu.ph department registrar
+  .\.venv\Scripts\python.exe set_role.py someone@ub.edu.ph student
+  ```
+
+  Roles are what the admin and department dashboards will check; the dashboards aren't built yet.
 
 ## Asking an office
 

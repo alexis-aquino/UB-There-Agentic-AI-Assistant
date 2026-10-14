@@ -144,7 +144,8 @@ def test_failed_email_does_not_leave_an_orphan_ticket(monkeypatch):
 
 
 def test_unanswerable_question_offers_an_office(index):
-    body = client.post("/api/chat", json={"message": "What is the capital of France?"}).json()
+    headers, _ = sign_up()
+    body = client.post("/api/chat", json={"message": "What is the capital of France?"}, headers=headers).json()
     assert body["can_reroute"] is True
-    greeting = client.post("/api/chat", json={"message": "Hello!"}).json()
+    greeting = client.post("/api/chat", json={"message": "Hello!"}, headers=headers).json()
     assert greeting["can_reroute"] is False

@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from dataclasses import asdict
 from functools import lru_cache
 
@@ -47,6 +48,17 @@ def current_user(authorization: str = Header(default="")) -> User:
     if user is None:
         raise HTTPException(status_code=401, detail="Please sign in again.")
     return user
+
+
+def require_role(*roles: str) -> Callable[..., User]:
+    """A dependency that lets only these roles through, e.g. Depends(require_role("admin"))."""
+
+    def check(user: User = Depends(current_user)) -> User:
+        if user.role not in roles:
+            raise HTTPException(status_code=403, detail="Your account can't open this page.")
+        return user
+
+    return check
 
 
 @router.get("/config", response_model=AuthConfig)

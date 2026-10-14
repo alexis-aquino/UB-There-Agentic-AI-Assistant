@@ -70,6 +70,9 @@ class UserOut(BaseModel):
     default_password: bool = False
     # True for accounts outside the university domain (signed up with email).
     guest: bool = True
+    # student | department | admin. Department accounts belong to one office.
+    role: str = "student"
+    office_id: str | None = None
 
 
 class AuthResponse(BaseModel):

@@ -5,8 +5,9 @@ from fastapi.testclient import TestClient
 
 from app.config import get_settings
 from app.main import app
+from accounts import headers_for
 
-client = TestClient(app)
+client = TestClient(app, headers=headers_for())
 HANDBOOK = "studenthandbook.pdf"
 EARRINGS = "Wearing of earrings is not allowed for male students"
 

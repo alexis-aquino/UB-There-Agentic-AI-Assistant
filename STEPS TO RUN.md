@@ -19,7 +19,9 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r ..\requirements.txt
 copy .env.example .env
 .\.venv\Scripts\python.exe ingest.py
-.\.venv\Scripts\python.exe -c "from app.config import get_settings as g; from app.auth.store import UserStore; s = UserStore(g().users_db, g().default_password); [s.create(e, n) for e, n in [('admin@ub.edu.ph', 'UB Admin'), ('student@ub.edu.ph', 'UB Student')]]"
+.\.venv\Scripts\python.exe -c "from app.config import get_settings as g; from app.auth.store import UserStore; s = UserStore(g().users_db, g().default_password); [s.create(e, n) for e, n in [('admin@ub.edu.ph', 'UB Admin'), ('student@ub.edu.ph', 'UB Student'), ('registrar@ub.edu.ph', 'UB Registrar')]]"
+.\.venv\Scripts\python.exe set_role.py admin@ub.edu.ph admin
+.\.venv\Scripts\python.exe set_role.py registrar@ub.edu.ph department registrar
 ```
 
 ```
@@ -52,5 +54,6 @@ Open **http://localhost:5273** → **Admin / Guest login** → sign in with a de
 |---|---|---|
 | Student | student@ub.edu.ph | 12345678 |
 | Admin | admin@ub.edu.ph | 12345678 |
+| Department (Registrar's Office) | registrar@ub.edu.ph | 12345678 |
 
 Every new account (guest or UB Mail) also starts with the password **12345678**.

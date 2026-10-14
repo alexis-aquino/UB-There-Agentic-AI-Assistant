@@ -64,6 +64,7 @@ export default function ChatBot({ auth, theme }) {
   const { speak, stop, beginStream, feedStream, endStream, speaking, loading, usingFallback } = useVoice({
     enabled: voiceOn,
     voice: voiceId,
+    token,
   });
 
   useEffect(() => {
@@ -123,9 +124,14 @@ export default function ChatBot({ auth, theme }) {
     try {
       const res = await fetch(`${API_URL}/api/chat/stream`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ message: question, session_id: sessionId }),
       });
+      // An expired session: back to the sign-in page rather than an error in the chat.
+      if (res.status === 401) {
+        logout();
+        return;
+      }
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.detail ?? `Request failed (${res.status})`);

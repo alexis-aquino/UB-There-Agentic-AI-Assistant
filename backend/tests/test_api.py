@@ -6,8 +6,9 @@ from fastapi.testclient import TestClient
 from app.brain.llm import ModelUnavailableError
 from app.main import app
 from app.routers import chat as chat_router
+from accounts import headers_for
 
-client = TestClient(app)
+client = TestClient(app, headers=headers_for())
 
 
 def chat(message, session_id="test"):

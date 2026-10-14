@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS users (
     google_sub TEXT UNIQUE,
     picture TEXT,
     default_password INTEGER NOT NULL DEFAULT 1,
+    role TEXT NOT NULL DEFAULT 'student',
+    office_id TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -29,7 +31,22 @@ CREATE TABLE IF NOT EXISTS meta (
 """
 
 
+# student: everyone by default (guests too). department: staff of one office (office_id).
+# admin: the whole system.
+ROLES = ("student", "department", "admin")
+
+# Columns added after the first release; older users.db files get them on startup.
+MIGRATIONS = {
+    "role": "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'student'",
+    "office_id": "ALTER TABLE users ADD COLUMN office_id TEXT",
+}
+
+
 class EmailTakenError(Exception):
+    pass
+
+
+class UnknownUserError(Exception):
     pass
 
 
@@ -41,6 +58,8 @@ class User:
     picture: str | None
     google_linked: bool
     default_password: bool
+    role: str = "student"
+    office_id: str | None = None
 
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> "User":
@@ -51,6 +70,8 @@ class User:
             picture=row["picture"],
             google_linked=row["google_sub"] is not None,
             default_password=bool(row["default_password"]),
+            role=row["role"],
+            office_id=row["office_id"],
         )
 
 
@@ -62,8 +83,15 @@ class UserStore:
         self._connection = sqlite3.connect(str(db_path), check_same_thread=False)
         self._connection.row_factory = sqlite3.Row
         self._connection.executescript(SCHEMA)
+        self._migrate()
         self._connection.commit()
         self.secret = self._signing_secret()
+
+    def _migrate(self) -> None:
+        columns = {row["name"] for row in self._connection.execute("PRAGMA table_info(users)")}
+        for column, sql in MIGRATIONS.items():
+            if column not in columns:
+                self._connection.execute(sql)
 
     def _signing_secret(self) -> str:
         """Generated once and kept in the db, so sessions survive restarts."""
@@ -157,3 +185,23 @@ class UserStore:
             )
             self._connection.commit()
         return True
+
+    def set_role(self, email: str, role: str, office_id: str | None = None) -> User:
+        """Make an account a student, an office's staff, or an admin."""
+        if role not in ROLES:
+            raise ValueError(f"Unknown role {role!r}; use one of {', '.join(ROLES)}.")
+        if (role == "department") != bool(office_id):
+            raise ValueError("Department accounts need an office; other roles must not have one.")
+        with self._lock:
+            cursor = self._connection.execute(
+                "UPDATE users SET role = ?, office_id = ? WHERE email = ?",
+                (role, office_id, email.strip()),
+            )
+            self._connection.commit()
+        if cursor.rowcount == 0:
+            raise UnknownUserError(email)
+        return self.get_by_email(email)
+
+    def get_by_email(self, email: str) -> User | None:
+        row = self._one("SELECT * FROM users WHERE email = ?", (email.strip(),))
+        return User.from_row(row) if row else None

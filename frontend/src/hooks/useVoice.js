@@ -53,7 +53,7 @@ const speakable = (text) => text.replace(/[*_#`]+/g, '').replace(/\s+/g, ' ').tr
  * in a fraction of a second instead of after the whole reply. Works on streamed replies too —
  * feed it the text as it grows. The browser's own voice is the fallback if the server can't.
  */
-export default function useVoice({ enabled = true, voice = null } = {}) {
+export default function useVoice({ enabled = true, voice = null, token = null } = {}) {
   const [speaking, setSpeaking] = useState(false);
   const [loading, setLoading] = useState(false);
   const [usingFallback, setUsingFallback] = useState(false);
@@ -67,6 +67,8 @@ export default function useVoice({ enabled = true, voice = null } = {}) {
   const generationRef = useRef(0); // bumped by stop(); stale work checks it and bails
   const voiceRef = useRef(voice);
   voiceRef.current = voice;
+  const tokenRef = useRef(token);
+  tokenRef.current = token;
 
   const audioContext = () => {
     if (!contextRef.current) {
@@ -80,7 +82,7 @@ export default function useVoice({ enabled = true, voice = null } = {}) {
     try {
       const response = await fetch(`${API_URL}/api/speak`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tokenRef.current}` },
         body: JSON.stringify({ text, voice: voiceId }),
       });
       if (!response.ok) return null;
