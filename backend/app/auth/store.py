@@ -202,6 +202,11 @@ class UserStore:
             raise UnknownUserError(email)
         return self.get_by_email(email)
 
+    def all(self) -> list[User]:
+        with self._lock:
+            rows = self._connection.execute("SELECT * FROM users ORDER BY id").fetchall()
+        return [User.from_row(row) for row in rows]
+
     def get_by_email(self, email: str) -> User | None:
         row = self._one("SELECT * FROM users WHERE email = ?", (email.strip(),))
         return User.from_row(row) if row else None

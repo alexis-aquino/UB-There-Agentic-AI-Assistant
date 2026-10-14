@@ -131,6 +131,17 @@ class TicketStore:
             ).fetchall()
         return [Ticket.from_row(row) for row in rows]
 
+    def counts_by_office(self) -> dict[str, dict[str, int]]:
+        """{office_id: {"open": n, "answered": n}} over all time."""
+        with self._lock:
+            rows = self._connection.execute(
+                "SELECT office_id, status, COUNT(*) AS n FROM tickets GROUP BY office_id, status"
+            ).fetchall()
+        counts: dict[str, dict[str, int]] = {}
+        for row in rows:
+            counts.setdefault(row["office_id"], {"open": 0, "answered": 0})[row["status"]] = row["n"]
+        return counts
+
     def count_since(self, user_id: int, hours: int) -> int:
         with self._lock:
             row = self._connection.execute(

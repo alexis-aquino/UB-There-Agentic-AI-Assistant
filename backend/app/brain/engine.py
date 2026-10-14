@@ -252,6 +252,11 @@ def stream_answer(message: str, session_id: str = "default") -> Iterator[dict]:
     history.append(ChatMessage(role=MessageRole.USER, content=message))
     history.append(ChatMessage(role=MessageRole.ASSISTANT, content=text))
     brain.memory.log_turn(session_id, "assistant", text)
+    can_reroute = intent == QUESTION and (not nodes or said_not_found)
+    if intent == QUESTION:
+        brain.memory.log_inquiry(
+            session_id, message, not can_reroute, round(confidence, 2), sources[0] if sources else None
+        )
 
     trace.append(f"Written by {reply_model_name()} in {time.perf_counter() - started:.1f} s.")
 
@@ -264,7 +269,7 @@ def stream_answer(message: str, session_id: str = "default") -> Iterator[dict]:
         "intent": intent,
         "trace": trace,
         # Offer "Ask an office" whenever the handbook didn't answer it.
-        "can_reroute": intent == QUESTION and (not nodes or said_not_found),
+        "can_reroute": can_reroute,
     }
 
 

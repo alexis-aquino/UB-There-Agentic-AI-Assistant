@@ -70,5 +70,5 @@ cloned voice; weights are **non-commercial**), or `off`.
 
 Accounts exist (email/password and Google, see [RUNNING.md](RUNNING.md)), and asking questions
 needs a signed-in account. Accounts have roles (student, department, admin). Department staff get a
-questions desk for their office; there is no administrator dashboard yet, and no document-audit (DFD
-process 4.0).
+questions desk for their office, and admins a dashboard (inquiry trends, handbook gaps, office
+workload, account roles). There is no document-audit yet (DFD process 4.0).

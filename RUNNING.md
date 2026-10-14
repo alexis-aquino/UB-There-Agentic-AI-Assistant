@@ -154,7 +154,17 @@ it, **Admin / Guest login** (`#/guest`) is the email-and-password door, with gue
 
   A **department** account signs in to its office's **questions desk** instead of the chat: the
   questions students sent that office, waiting ones first, answered right there (the email answer
-  link keeps working too). The admin dashboard isn't built yet.
+  link keeps working too).
+
+  An **admin** account signs in to the **admin dashboard** ("Open the assistant" switches to the chat,
+  and the chat's Menu has "Admin dashboard" to come back):
+  - **Overview** — questions asked per day, how many the handbook answered, the questions it
+    couldn't answer (grouped, most-asked first — where the handbook needs content), the most-cited
+    pages, and each office's waiting / answered questions.
+  - **Accounts** — every account with its role; change a role (and a department's office) there
+    instead of with `set_role.py`. You can't remove your own admin role.
+
+  Trends count questions from when this feature was added; older chats aren't in them.
 
 ## Asking an office
 

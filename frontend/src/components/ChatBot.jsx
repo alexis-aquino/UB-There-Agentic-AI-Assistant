@@ -41,7 +41,7 @@ function readSavedVoice() {
   }
 }
 
-export default function ChatBot({ auth, theme }) {
+export default function ChatBot({ auth, theme, onDashboard }) {
   const { user, token, config, changePassword, logout } = auth;
   // One conversation thread per signed-in user, fresh on each page load.
   const [sessionId] = useState(() => `user-${user.id}-${Math.random().toString(36).slice(2, 8)}`);
@@ -234,6 +234,7 @@ export default function ChatBot({ auth, theme }) {
           onVoiceSettings={() => setShowVoicePanel(true)}
           onMyQuestions={() => setShowTickets(true)}
           onAccount={() => setShowAccount(true)}
+          onDashboard={onDashboard}
           theme={theme.theme}
           onToggleTheme={theme.toggle}
           onSignOut={() => {

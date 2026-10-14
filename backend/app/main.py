@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.brain import engine
 from app.brain.engine import status
 from app.config import get_settings
-from app.routers import auth, chat, sources, speech, tickets, voice_dataset
+from app.routers import admin, auth, chat, sources, speech, tickets, voice_dataset
 from app.voice import service as voice
 
 settings = get_settings()
@@ -36,6 +36,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(admin.router)
 app.include_router(chat.router)
 app.include_router(tickets.router)
 app.include_router(sources.router)

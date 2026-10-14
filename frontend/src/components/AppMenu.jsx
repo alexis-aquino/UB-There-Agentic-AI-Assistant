@@ -12,6 +12,7 @@ export default function AppMenu({
   onVoiceSettings,
   onMyQuestions,
   onAccount,
+  onDashboard,
   theme,
   onToggleTheme,
   onSignOut,
@@ -74,6 +75,11 @@ export default function AppMenu({
           <button type="button" role="menuitem" onClick={thenClose(onAccount)}>
             Account
           </button>
+          {onDashboard && (
+            <button type="button" role="menuitem" onClick={thenClose(onDashboard)}>
+              Admin dashboard
+            </button>
+          )}
           <button type="button" role="menuitemcheckbox" aria-checked={theme === 'dark'} onClick={onToggleTheme}>
             Dark mode
             <span className="app-menu-state">{theme === 'dark' ? 'On' : 'Off'}</span>

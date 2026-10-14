@@ -141,3 +141,11 @@ class TicketAnswer(BaseModel):
             if not value:
                 raise ValueError("Please write an answer first.")
         return value
+
+
+# ---------- admin dashboard ----------
+
+
+class RoleUpdate(BaseModel):
+    role: str = Field(pattern=r"^(student|department|admin)$")
+    office_id: str | None = Field(default=None, max_length=40)
