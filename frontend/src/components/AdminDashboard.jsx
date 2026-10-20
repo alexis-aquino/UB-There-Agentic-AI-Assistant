@@ -1,139 +1,39 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../api.js';
 import AccountPanel from './AccountPanel.jsx';
 import AdminDocuments from './AdminDocuments.jsx';
+import {
+  DailyChart,
+  RangePicker,
+  Stat,
+  TopSources,
+  UnansweredList,
+  handbookRate,
+  useReport,
+} from './InquiryTrends.jsx';
 import ThemeToggle from './ThemeToggle.jsx';
 
-const RANGES = [7, 14, 30];
-const ROLE_NAMES = { student: 'Student', department: 'Department', admin: 'Admin' };
-
-function shortDay(iso) {
-  return new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-
-function when(iso) {
-  if (!iso) return '';
-  return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-}
+const ROLE_NAMES = {
+  student: 'Student',
+  department: 'Department',
+  admin: 'Admin',
+};
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-function Stat({ label, value, note }) {
-  return (
-    <div className="stat">
-      <p className="stat-label">{label}</p>
-      <p className="stat-value">{value}</p>
-      {note && <p className="stat-note">{note}</p>}
-    </div>
-  );
-}
-
-/** Questions per day: one series, so the title names it and no legend is needed. */
-function DailyChart({ days }) {
-  const [hover, setHover] = useState(null);
-  const [asTable, setAsTable] = useState(false);
-  const max = Math.max(1, ...days.map((d) => d.asked));
-  const labelEvery = days.length > 14 ? 5 : days.length > 7 ? 2 : 1;
-
-  return (
-    <figure className="chart">
-      <figcaption className="chart-head">
-        <h3>Questions per day</h3>
-        <button type="button" className="link-button" onClick={() => setAsTable((v) => !v)}>
-          {asTable ? 'Show as chart' : 'Show as table'}
-        </button>
-      </figcaption>
-
-      {asTable ? (
-        <table className="dash-table">
-          <thead>
-            <tr>
-              <th scope="col">Day</th>
-              <th scope="col">Asked</th>
-              <th scope="col">Answered by the handbook</th>
-            </tr>
-          </thead>
-          <tbody>
-            {days.map((d) => (
-              <tr key={d.day}>
-                <td>{shortDay(d.day)}</td>
-                <td>{d.asked}</td>
-                <td>{d.answered}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : (
-        <div className="chart-plot" onMouseLeave={() => setHover(null)}>
-          <span className="chart-max" aria-hidden="true">
-            {max}
-          </span>
-          <div className="chart-bars" role="img" aria-label={`Questions per day, highest ${max}`}>
-            {days.map((d, i) => (
-              // The whole column is the hit target, not just the bar.
-              <div
-                key={d.day}
-                className="chart-col"
-                onMouseEnter={() => setHover(i)}
-                onFocus={() => setHover(i)}
-                tabIndex={0}
-                aria-label={`${shortDay(d.day)}: ${d.asked} asked, ${d.answered} answered`}
-              >
-                <div className="chart-bar" style={{ height: `${(d.asked / max) * 100}%` }} />
-                {hover === i && (
-                  <div className="chart-tip" role="tooltip">
-                    <strong>{shortDay(d.day)}</strong>
-                    <span>{d.asked} asked</span>
-                    <span>{d.answered} answered by the handbook</span>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-          <div className="chart-axis" aria-hidden="true">
-            {days.map((d, i) => (
-              <span key={d.day}>{i % labelEvery === 0 ? shortDay(d.day) : ''}</span>
-            ))}
-          </div>
-        </div>
-      )}
-    </figure>
-  );
-}
-
 function Overview({ token }) {
-  const [days, setDays] = useState(14);
-  const [report, setReport] = useState(null);
-  const [error, setError] = useState(null);
-
-  const load = useCallback(() => {
-    setError(null);
-    apiFetch(`/api/admin/report?days=${days}`, { token })
-      .then(setReport)
-      .catch((err) => setError(err.message));
-  }, [token, days]);
-
-  useEffect(load, [load]);
+  const { days, setDays, report, error, load } = useReport('/api/admin/report', token);
 
   if (error) return <p className="voice-error">{error}</p>;
   if (!report) return <p className="voice-hint">Loading…</p>;
 
   const { inquiries, offices, accounts } = report;
-  const rate = inquiries.asked ? Math.round((inquiries.answered / inquiries.asked) * 100) : null;
+  const rate = handbookRate(inquiries);
   const openTickets = offices.reduce((sum, o) => sum + o.open, 0);
 
   return (
     <>
-      <div className="dash-filters" role="group" aria-label="Period">
-        {RANGES.map((n) => (
-          <button key={n} type="button" className="dash-filter" aria-pressed={days === n} onClick={() => setDays(n)}>
-            Last {n} days
-          </button>
-        ))}
-        <button type="button" className="link-button" onClick={load}>
-          Refresh
-        </button>
-      </div>
+      <RangePicker days={days} setDays={setDays} onRefresh={load} />
 
       <div className="stats">
         <Stat label="Questions asked" value={inquiries.asked} note={`last ${days} days`} />
@@ -150,48 +50,26 @@ function Overview({ token }) {
 
       <div className="dash-columns">
         <section>
-          <h3>Not in the handbook</h3>
-          <p className="voice-hint">Questions the handbook couldn’t answer, most-asked first — where it may need more content.</p>
-          {inquiries.unanswered.length === 0 ? (
-            <p className="voice-hint">None in this period.</p>
-          ) : (
-            <ul className="ticket-list">
-              {inquiries.unanswered.map((q) => (
-                <li key={q.question} className="ticket">
-                  <span className="ticket-meta">
-                    {q.count === 1 ? 'Asked once' : `Asked ${q.count} times`} · last {when(q.last_asked)}
-                  </span>
-                  <p className="ticket-question">{q.question}</p>
-                </li>
-              ))}
-            </ul>
-          )}
+          <UnansweredList
+            inquiries={inquiries}
+            hint="Questions the handbook couldn’t answer, most-asked first — where it may need more content."
+          />
         </section>
 
         <section>
-          <h3>Most-cited handbook pages</h3>
-          {inquiries.top_sources.length === 0 ? (
-            <p className="voice-hint">None in this period.</p>
-          ) : (
-            <table className="dash-table">
-              <tbody>
-                {inquiries.top_sources.map((s) => (
-                  <tr key={s.source}>
-                    <td>{s.source}</td>
-                    <td className="num">{s.count}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+          <TopSources inquiries={inquiries} />
 
           <h3>Offices</h3>
           <table className="dash-table">
             <thead>
               <tr>
                 <th scope="col">Office</th>
-                <th scope="col" className="num">Waiting</th>
-                <th scope="col" className="num">Answered</th>
+                <th scope="col" className="num">
+                  Waiting
+                </th>
+                <th scope="col" className="num">
+                  Answered
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -231,7 +109,10 @@ function UserRow({ person, offices, token, isSelf, onSaved }) {
       const saved = await apiFetch(`/api/admin/users/${person.id}/role`, {
         token,
         method: 'PUT',
-        body: { role, office_id: role === 'department' ? officeId || null : null },
+        body: {
+          role,
+          office_id: role === 'department' ? officeId || null : null,
+        },
       });
       onSaved(saved);
     } catch (err) {
@@ -262,7 +143,11 @@ function UserRow({ person, offices, token, isSelf, onSaved }) {
           ))}
         </select>
         {role === 'department' && (
-          <select value={officeId} onChange={(e) => setOfficeId(e.target.value)} aria-label={`Office for ${person.name}`}>
+          <select
+            value={officeId}
+            onChange={(e) => setOfficeId(e.target.value)}
+            aria-label={`Office for ${person.name}`}
+          >
             <option value="">Choose an office…</option>
             {offices.map((o) => (
               <option key={o.id} value={o.id}>
@@ -371,7 +256,9 @@ export default function AdminDashboard({ auth, theme, onOpenAssistant }) {
     <div className="app-shell">
       <header className="masthead">
         <div className="masthead-brand">
-          <span className="seal" aria-hidden="true">UB</span>
+          <span className="seal" aria-hidden="true">
+            UB
+          </span>
           <div>
             <h1>UB There</h1>
             <p className="label">Administration</p>

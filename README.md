@@ -70,7 +70,7 @@ cloned voice; weights are **non-commercial**), or `off`.
 
 Accounts exist (email/password and Google, see [RUNNING.md](RUNNING.md)), and asking questions
 needs a signed-in account. Accounts have roles (student, department, admin). Department staff get a
-questions desk for their office. Admins get a dashboard: inquiry trends, handbook gaps, office
+questions desk for their office and the inquiry trends about it. Admins get a dashboard: inquiry trends, handbook gaps, office
 workload, account roles, and the **document audit** (DFD process 4.0): the handbook files, whether
 the index has each one, upload / replace / delete, a rebuild without restarting, and a change log
 of who did what (`app/documents.py`, `app/brain/build.py`).

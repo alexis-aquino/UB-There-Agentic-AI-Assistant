@@ -154,7 +154,9 @@ it, **Admin / Guest login** (`#/guest`) is the email-and-password door, with gue
 
   A **department** account signs in to its office's **questions desk** instead of the chat: the
   questions students sent that office, waiting ones first, answered right there (the email answer
-  link keeps working too).
+  link keeps working too). Its **Trends** tab shows the same charts as the admin overview, but
+  only for the questions about that office: those matching the office's `keywords` in
+  `backend/offices.json`. Questions that match no office's keywords appear only to admins.
 
   An **admin** account signs in to the **admin dashboard** ("Open the assistant" switches to the chat,
   and the chat's Menu has "Admin dashboard" to come back):

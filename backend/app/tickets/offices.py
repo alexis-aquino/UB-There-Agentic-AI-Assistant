@@ -37,11 +37,11 @@ def get_office(office_id: str) -> Office | None:
     return next((office for office in load_offices() if office.id == office_id), None)
 
 
-def suggest_office(question: str) -> str | None:
-    """The office whose keywords best match the question; the first office if none match."""
-    offices = load_offices()
-    if not offices:
-        return None
+def match_office(question: str, offices: list[Office] | None = None) -> str | None:
+    """The office whose keywords best match the question, or None if no keyword matches.
+    This is what makes a question "about" an office in the department's trends.
+    Pass `offices` when matching many questions, so the file is read once."""
+    offices = load_offices() if offices is None else offices
     words = re.findall(r"[a-z]+", question.lower())
 
     def score(office: Office) -> int:
@@ -53,5 +53,15 @@ def suggest_office(question: str) -> str | None:
             if word == keyword or (len(keyword) >= 4 and word.startswith(keyword))
         )
 
+    if not offices:
+        return None
     best = max(offices, key=score)
-    return best.id if score(best) > 0 else offices[0].id
+    return best.id if score(best) > 0 else None
+
+
+def suggest_office(question: str) -> str | None:
+    """The office whose keywords best match the question; the first office if none match."""
+    offices = load_offices()
+    if not offices:
+        return None
+    return match_office(question, offices) or offices[0].id

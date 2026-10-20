@@ -85,3 +85,47 @@ def test_staff_accounts_report_their_office():
     me = client.get("/api/auth/me", headers=headers_for("department", "registrar")).json()
     assert me["role"] == "department"
     assert me["office_id"] == "registrar" and me["office_name"] == "Registrar's Office"
+
+
+def report(headers, days=14):
+    return client.get(f"/api/department/report?days={days}", headers=headers)
+
+
+def test_trends_show_only_questions_about_the_staff_members_office():
+    from app.routers import admin
+
+    log = admin.get_query_log()
+    registrar = headers_for("department", "registrar")
+    accounting = headers_for("department", "accounting")
+    before_reg = report(registrar).json()["inquiries"]
+    before_acc = report(accounting).json()["inquiries"]
+
+    log.log_inquiry("s", "How do I request my transcript of records?", False, 0.0, None)
+    log.log_inquiry("s", "Can I enroll in an overload subject?", True, 0.7, "studenthandbook.pdf, p. 12")
+    log.log_inquiry("s", "When is the tuition fee due?", False, 0.0, None)
+    log.log_inquiry("s", "Where is the canteen?", False, 0.0, None)  # no office's keywords
+
+    reg = report(registrar).json()["inquiries"]
+    assert reg["asked"] == before_reg["asked"] + 2
+    assert reg["answered"] == before_reg["answered"] + 1
+    gaps = [q["question"] for q in reg["unanswered"]]
+    assert "How do I request my transcript of records?" in gaps
+    assert "When is the tuition fee due?" not in gaps and "Where is the canteen?" not in gaps
+
+    acc = report(accounting).json()["inquiries"]
+    assert acc["asked"] == before_acc["asked"] + 1
+    assert [q["question"] for q in acc["unanswered"]].count("When is the tuition fee due?") == 1
+
+
+def test_trends_count_the_offices_own_tickets():
+    staff = headers_for("department", "guidance")
+    before = report(staff).json()["tickets"]
+    ask(sign_up()[0], "I feel stressed, who can I talk to?", "guidance")
+    assert report(staff).json()["tickets"]["open"] == before["open"] + 1
+
+
+def test_only_department_staff_see_office_trends():
+    assert report({}).status_code == 401
+    assert report(sign_up()[0]).status_code == 403
+    assert report(headers_for("admin")).status_code == 403
+    assert report(headers_for("department", "registrar"), days=0).status_code == 422

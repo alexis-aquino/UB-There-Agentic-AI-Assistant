@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import sqlite3
 import threading
+from collections.abc import Callable
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -64,31 +65,46 @@ class Memory:
             )
             self._connection.commit()
 
-    def inquiry_report(self, days: int, top: int = 8, gaps: int = 20) -> dict:
+    def inquiry_report(
+        self,
+        days: int,
+        top: int = 8,
+        gaps: int = 20,
+        include: Callable[[str], bool] | None = None,
+    ) -> dict:
         """Questions over the last `days` days: totals, per day, most-cited pages, and the
         questions the handbook couldn't answer (where it may need more content), the same
-        question asked again counted once, most-asked first."""
+        question asked again counted once, most-asked first.
+
+        `include` narrows the report to the questions it accepts (one office's, for its
+        department dashboard). It runs at report time, so older questions count too."""
         since = (f"-{days - 1} days",)
         with self._lock:
+            # Every query below filters on in_scope(question).
+            self._connection.create_function(
+                "in_scope", 1, (lambda q: int(include(q))) if include else (lambda q: 1), deterministic=True
+            )
             run = self._connection.execute
             totals = run(
                 "SELECT COUNT(*) AS asked, COALESCE(SUM(answered), 0) AS answered FROM inquiries"
-                " WHERE created_at >= date('now', ?)",
+                " WHERE in_scope(question) AND created_at >= date('now', ?)",
                 since,
             ).fetchone()
             per_day = run(
                 "SELECT date(created_at) AS day, COUNT(*) AS asked, SUM(answered) AS answered"
-                " FROM inquiries WHERE created_at >= date('now', ?) GROUP BY day ORDER BY day",
+                " FROM inquiries WHERE in_scope(question) AND created_at >= date('now', ?)"
+                " GROUP BY day ORDER BY day",
                 since,
             ).fetchall()
             sources = run(
                 "SELECT source, COUNT(*) AS n FROM inquiries WHERE source IS NOT NULL"
-                " AND created_at >= date('now', ?) GROUP BY source ORDER BY n DESC, source LIMIT ?",
+                " AND in_scope(question) AND created_at >= date('now', ?)"
+                " GROUP BY source ORDER BY n DESC, source LIMIT ?",
                 (*since, top),
             ).fetchall()
             unanswered = run(
                 "SELECT MAX(question) AS question, COUNT(*) AS n, MAX(created_at) AS last_asked"
-                " FROM inquiries WHERE answered = 0 AND created_at >= date('now', ?)"
+                " FROM inquiries WHERE answered = 0 AND in_scope(question) AND created_at >= date('now', ?)"
                 " GROUP BY lower(trim(question)) ORDER BY n DESC, last_asked DESC LIMIT ?",
                 (*since, gaps),
             ).fetchall()
