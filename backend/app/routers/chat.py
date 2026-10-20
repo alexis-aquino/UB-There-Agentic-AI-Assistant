@@ -10,7 +10,7 @@ from app.auth.store import User
 from app.brain import engine
 from app.brain.engine import BrainNotReadyError, ModelUnavailableError
 from app.brain.llm import check_models
-from app.routers.auth import current_user
+from app.routers.auth import assistant_user
 from app.schemas import ChatQuery, ChatResponse
 
 logger = logging.getLogger(__name__)
@@ -38,7 +38,7 @@ def _session(query: ChatQuery, user: User) -> str:
 
 
 @router.post("/chat", response_model=ChatResponse)
-def chat(query: ChatQuery, user: User = Depends(current_user)) -> ChatResponse:
+def chat(query: ChatQuery, user: User = Depends(assistant_user)) -> ChatResponse:
     _ready()
     try:
         result = engine.answer(query.message, _session(query, user))
@@ -60,7 +60,7 @@ def chat(query: ChatQuery, user: User = Depends(current_user)) -> ChatResponse:
 
 
 @router.post("/chat/stream")
-def chat_stream(query: ChatQuery, user: User = Depends(current_user)) -> StreamingResponse:
+def chat_stream(query: ChatQuery, user: User = Depends(assistant_user)) -> StreamingResponse:
     """The reply as newline-delimited JSON: {"type":"delta","text":...} events, then "done"."""
     _ready()
     session_id = _session(query, user)
@@ -83,7 +83,7 @@ def chat_stream(query: ChatQuery, user: User = Depends(current_user)) -> Streami
 
 @router.post("/documents/check")
 async def check_document(
-    file: UploadFile = File(...), note: str = Form(""), user: User = Depends(current_user)
+    file: UploadFile = File(...), note: str = Form(""), user: User = Depends(assistant_user)
 ) -> dict:
     """A photo of a document, checked against the handbook's rules for it. Nothing is stored."""
     _ready()

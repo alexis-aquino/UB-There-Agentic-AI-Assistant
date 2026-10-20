@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 
 from app.config import get_settings
-from app.routers.auth import current_user
+from app.routers.auth import assistant_user
 from app.routers.voice_dataset import studio_only
 from app.schemas import SpeakRequest
 from app.voice.catalog import UnknownVoiceError, list_voices
@@ -30,7 +30,7 @@ def voices() -> dict:
 
 
 # Signed-in only: making speech is heavy work, so strangers shouldn't be able to queue it.
-@router.post("/speak", dependencies=[Depends(current_user)])
+@router.post("/speak", dependencies=[Depends(assistant_user)])
 def speak(request: SpeakRequest) -> Response:
     try:
         audio = synthesize(request.text, request.voice)

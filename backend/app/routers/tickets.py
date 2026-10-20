@@ -8,7 +8,7 @@ from fastapi.responses import HTMLResponse
 from app import mail
 from app.auth.store import User
 from app.config import get_settings
-from app.routers.auth import current_user, get_store, require_role
+from app.routers.auth import assistant_user, get_store, require_role
 from app.schemas import OfficeList, StaffTicketOut, TicketAnswer, TicketCreate, TicketOut
 from app.tickets.offices import get_office, load_offices, suggest_office
 from app.tickets.pages import answer_page, not_found_page
@@ -107,7 +107,7 @@ def offices(question: str = "") -> OfficeList:
 
 
 @router.post("/api/tickets", response_model=TicketOut, status_code=201)
-def create_ticket(body: TicketCreate, user: User = Depends(current_user)) -> TicketOut:
+def create_ticket(body: TicketCreate, user: User = Depends(assistant_user)) -> TicketOut:
     settings = get_settings()
     office = get_office(body.office_id)
     if office is None:
@@ -133,7 +133,7 @@ def create_ticket(body: TicketCreate, user: User = Depends(current_user)) -> Tic
 
 
 @router.get("/api/tickets", response_model=list[TicketOut])
-def my_tickets(user: User = Depends(current_user)) -> list[TicketOut]:
+def my_tickets(user: User = Depends(assistant_user)) -> list[TicketOut]:
     return [_out(ticket) for ticket in get_tickets().for_user(user.id)]
 
 

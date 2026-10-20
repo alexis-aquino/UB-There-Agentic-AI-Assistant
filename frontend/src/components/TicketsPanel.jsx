@@ -19,7 +19,7 @@ function when(iso) {
 }
 
 /** "My questions": everything this student passed to an office, and the answers. */
-export default function TicketsPanel({ token, onClose }) {
+export default function TicketsPanel({ token }) {
   const [tickets, setTickets] = useState(null);
   const [error, setError] = useState(null);
 
@@ -36,22 +36,17 @@ export default function TicketsPanel({ token, onClose }) {
     <section className="voice-panel" aria-label="My questions">
       <div className="voice-panel-head">
         <h2>My questions</h2>
-        <span className="ticket-head-actions">
-          <button type="button" className="link-button" onClick={load}>
-            Refresh
-          </button>
-          <button type="button" className="link-button" onClick={onClose}>
-            Close
-          </button>
-        </span>
+        <button type="button" className="link-button" onClick={load}>
+          Refresh
+        </button>
       </div>
 
       {error && <p className="voice-error">{error}</p>}
       {!tickets && !error && <p className="voice-hint">Loading…</p>}
       {tickets?.length === 0 && (
         <p className="voice-hint">
-          Nothing yet. When I can’t answer something, tap “Ask an office” under my reply and I’ll
-          pass your question along.
+          Nothing yet. When I can’t answer something, tap “Ask an office” under my reply and I’ll pass your question
+          along.
         </p>
       )}
 
@@ -71,8 +66,7 @@ export default function TicketsPanel({ token, onClose }) {
               {t.answer && (
                 <div className="ticket-answer">
                   <p className="ticket-answer-by">
-                    {answeredBy(t)} ·{' '}
-                    {when(t.answered_at)}
+                    {answeredBy(t)} · {when(t.answered_at)}
                   </p>
                   <p className="ticket-answer-text">{t.answer}</p>
                 </div>

@@ -12,7 +12,7 @@ import {
   handbookRate,
   useReport,
 } from './InquiryTrends.jsx';
-import ThemeToggle from './ThemeToggle.jsx';
+import Masthead, { SubPage } from './Masthead.jsx';
 
 const FILTERS = [
   { id: 'open', label: 'Waiting' },
@@ -141,7 +141,8 @@ export default function DepartmentDashboard({ auth, theme }) {
   const [error, setError] = useState(null);
   const [filter, setFilter] = useState('open');
   const [editing, setEditing] = useState(null);
-  const [showAccount, setShowAccount] = useState(false);
+  // A Menu page shown instead of the desk ('account'), or null.
+  const [page, setPage] = useState(null);
   const [tab, setTab] = useState('questions');
 
   const load = useCallback(() => {
@@ -166,52 +167,34 @@ export default function DepartmentDashboard({ auth, theme }) {
 
   return (
     <div className="app-shell">
-      <header className="masthead">
-        <div className="masthead-brand">
-          <span className="seal" aria-hidden="true">
-            UB
-          </span>
-          <div>
-            <h1>UB There</h1>
-            <p className="label">{user.office_name ?? 'Department'} · Questions desk</p>
-          </div>
-        </div>
-        <nav className="masthead-nav" aria-label="Account">
-          <ThemeToggle theme={theme.theme} onToggle={theme.toggle} className="masthead-link" />
-          <button
-            type="button"
-            className="masthead-link"
-            aria-expanded={showAccount}
-            onClick={() => setShowAccount((v) => !v)}
-          >
-            Account
-          </button>
-          <button type="button" className="masthead-link" onClick={logout}>
-            Sign out
-          </button>
-        </nav>
-      </header>
+      <Masthead
+        subtitle={`${user.office_name ?? 'Department'} · Questions desk`}
+        menu={{
+          user,
+          onAccount: () => setPage('account'),
+          theme: theme.theme,
+          onToggleTheme: theme.toggle,
+          onSignOut: logout,
+        }}
+      />
 
-      {user.default_password && !showAccount && (
+      {user.default_password && page !== 'account' && (
         <div className="notice" role="status">
           <span className="label">Notice</span>
           <span>You are still using the starting password. Change it to keep your account yours.</span>
-          <button type="button" className="link-button" onClick={() => setShowAccount(true)}>
+          <button type="button" className="link-button" onClick={() => setPage('account')}>
             Change password
           </button>
         </div>
       )}
 
-      {showAccount && (
-        <AccountPanel
-          user={user}
-          defaultPassword={config.default_password}
-          onChangePassword={changePassword}
-          onClose={() => setShowAccount(false)}
-        />
+      {page === 'account' && (
+        <SubPage backLabel="Back to the questions desk" onBack={() => setPage(null)}>
+          <AccountPanel user={user} defaultPassword={config.default_password} onChangePassword={changePassword} />
+        </SubPage>
       )}
 
-      <section className="voice-panel dash" aria-label={user.office_name ?? 'Your office'}>
+      <section className="voice-panel dash" aria-label={user.office_name ?? 'Your office'} hidden={Boolean(page)}>
         <div className="dash-tabs" role="tablist">
           {[
             ['questions', 'Questions'],

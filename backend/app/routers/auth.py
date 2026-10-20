@@ -65,6 +65,11 @@ def require_role(*roles: str) -> Callable[..., User]:
     return check
 
 
+# Who may use the assistant (chat, voice, "Ask an office", document check): guests and
+# students. Department staff and admins work from their dashboards and don't use it.
+assistant_user = require_role("guest", "student")
+
+
 @router.get("/config", response_model=AuthConfig)
 def config() -> AuthConfig:
     settings = get_settings()

@@ -149,7 +149,8 @@ it, **Admin / Guest login** (`#/guest`) is the email-and-password door, with gue
   - **Department Staff**: staff of one office (an `id` from `backend/offices.json`).
   - **Administrator**: the whole system.
 
-  Guests and students both use the chat, "Ask an office" and the document check. Staff and admins
+  Only guests and students use the chat, "Ask an office" and the document check. Department
+  staff and administrators work from their dashboards, and the server refuses them the assistant. Staff and admins
   are set by an admin (Accounts tab) or from `backend/`. The account must exist first:
 
   ```
@@ -172,8 +173,14 @@ it, **Admin / Guest login** (`#/guest`) is the email-and-password door, with gue
   DFD): staff add files, replace or delete the ones their office added, and rebuild the index. A
   file belongs to the office that first uploaded it; files an admin added can't be changed there.
 
-  An **admin** account signs in to the **admin dashboard** ("Open the assistant" switches to the chat,
-  and the chat's Menu has "Admin dashboard" to come back):
+  Every account has the same **Menu** button in the nav bar, which stays at the top while you
+  scroll. It holds that account's options: the chat's has Voice, Voice settings and My questions;
+  every Menu has Account, Dark mode and Sign out. Account, My questions and Voice settings open
+  as their own page, with a Back link at the top.
+
+  An **admin** account signs in to the **admin dashboard**. Admins don't use the assistant:
+  there's no way into the chat from the dashboard, and the server refuses an admin's chat, voice,
+  "Ask an office" and document-check requests.
   - **Overview** — questions asked per day, how many the handbook answered, the questions it
     couldn't answer (grouped, most-asked first — where the handbook needs content), the most-cited
     pages, and each office's waiting / answered questions.

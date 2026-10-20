@@ -158,3 +158,21 @@ def test_set_role_command(capsys):
     assert set_role.main([new_email(), "admin"]) == 1
     assert set_role.main([email, "owner"]) == 1
     assert auth.get_store().get_by_email(email).role == "department"
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "body"),
+    [
+        ("post", "/api/chat", {"message": "Hello"}),
+        ("post", "/api/chat/stream", {"message": "Hello"}),
+        ("post", "/api/speak", {"text": "Hello"}),
+        ("post", "/api/tickets", {"question": "Hi?", "office_id": "registrar"}),
+        ("get", "/api/tickets", None),
+        ("post", "/api/documents/check", None),
+    ],
+)
+@pytest.mark.parametrize("role", ["admin", "department"])
+def test_staff_and_admins_dont_use_the_assistant(method, path, body, role):
+    headers = headers_for(role, "registrar" if role == "department" else None)
+    response = getattr(client, method)(path, headers=headers, **({"json": body} if body else {}))
+    assert response.status_code == 403

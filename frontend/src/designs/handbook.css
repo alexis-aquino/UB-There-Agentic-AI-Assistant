@@ -117,16 +117,23 @@
 
   /* ---------- masthead ---------- */
 
+  /* Pinned to the top while the page scrolls, on paper of its own so the page slides under it. */
   .masthead {
-    position: relative;
+    position: sticky;
+    top: 0;
+    z-index: 30;
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
     gap: var(--space-4) var(--space-5);
     flex-wrap: wrap;
-    padding: var(--space-6) 0 var(--space-4);
+    padding: var(--space-5) 0 var(--space-4);
     margin-bottom: var(--space-5);
     border-bottom: 3px solid var(--rule-strong);
+    background-color: var(--bg);
+    background-image: var(--grain);
+    /* Paper under the thin second rule too, so text never shows between the two rules. */
+    box-shadow: 0 8px 0 var(--bg);
     animation: rise 700ms var(--ease-out) both;
   }
 
@@ -316,7 +323,7 @@
 
   .index {
     position: sticky;
-    top: var(--space-5);
+    top: calc(var(--masthead-height, 0px) + var(--space-5));
     padding-top: var(--space-2);
     animation: rise 700ms 120ms var(--ease-out) both;
   }
@@ -2049,7 +2056,7 @@
 
   .avatar-stage {
     position: sticky;
-    top: var(--space-4);
+    top: calc(var(--masthead-height, 0px) + var(--space-4));
     z-index: 0;
     /* Fits below the header and notice, so the whole figure shows without scrolling. */
     height: calc(100vh - 250px);
@@ -2507,5 +2514,25 @@
 
   .dash-log td {
     vertical-align: top;
+  }
+
+  /* ---------- pages opened from the Menu ---------- */
+
+  /* The screen behind an open Menu page stays mounted (the chat keeps its place) but hidden. */
+  .desk[hidden],
+  .dash[hidden] {
+    display: none;
+  }
+
+  .subpage {
+    display: grid;
+    gap: var(--space-3);
+    align-content: start;
+    width: min(760px, 100%);
+    padding-bottom: var(--space-6);
+  }
+
+  .subpage-back {
+    justify-self: start;
   }
 }

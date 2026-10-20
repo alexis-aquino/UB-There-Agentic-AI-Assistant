@@ -1,7 +1,7 @@
 const PREVIEW_TEXT = "Hi! I'm UB There. Ask me anything about the student handbook.";
 
 /** Pick which AI voice reads answers aloud. Voice recording lives in the backend only. */
-export default function VoicePanel({ catalog, selected, onSelect, onPreview, previewing, onClose }) {
+export default function VoicePanel({ catalog, selected, onSelect, onPreview, previewing }) {
   const provider = catalog?.provider;
   const voices = catalog?.voices ?? [];
 
@@ -9,9 +9,6 @@ export default function VoicePanel({ catalog, selected, onSelect, onPreview, pre
     <section className="voice-panel" aria-label="Voice settings">
       <div className="voice-panel-head">
         <h2>Voice</h2>
-        <button type="button" className="link-button" onClick={onClose}>
-          Close
-        </button>
       </div>
 
       {!catalog && <p className="voice-hint">Loading voices…</p>}
@@ -58,8 +55,7 @@ export default function VoicePanel({ catalog, selected, onSelect, onPreview, pre
             })}
           </ul>
           <p className="voice-hint">
-            New voices download the first time you use them (about 60 MB), so the first preview
-            can take a moment.
+            New voices download the first time you use them (about 60 MB), so the first preview can take a moment.
           </p>
         </>
       )}
