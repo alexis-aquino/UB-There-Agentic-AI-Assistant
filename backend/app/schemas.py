@@ -71,7 +71,7 @@ class UserOut(BaseModel):
     # True for accounts outside the university domain (signed up with email).
     guest: bool = True
     # student | department | admin. Department accounts belong to one office.
-    role: str = "student"
+    role: str = "guest"
     office_id: str | None = None
     office_name: str | None = None
 
@@ -147,5 +147,5 @@ class TicketAnswer(BaseModel):
 
 
 class RoleUpdate(BaseModel):
-    role: str = Field(pattern=r"^(student|department|admin)$")
+    role: str = Field(pattern=r"^(guest|student|department|admin)$")
     office_id: str | None = Field(default=None, max_length=40)

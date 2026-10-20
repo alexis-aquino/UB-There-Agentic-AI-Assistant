@@ -11,13 +11,9 @@ import {
   handbookRate,
   useReport,
 } from './InquiryTrends.jsx';
+import QueryLog from './QueryLog.jsx';
+import { ROLE_NAMES } from '../roles.js';
 import ThemeToggle from './ThemeToggle.jsx';
-
-const ROLE_NAMES = {
-  student: 'Student',
-  department: 'Department',
-  admin: 'Admin',
-};
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
@@ -85,8 +81,8 @@ function Overview({ token }) {
 
           <h3>Accounts</h3>
           <p className="voice-hint">
-            {plural(accounts.student, 'student')} · {accounts.department} department staff ·{' '}
-            {plural(accounts.admin, 'admin')}
+            {plural(accounts.guest, 'guest')} · {plural(accounts.student, 'student')} · {accounts.department} department
+            staff · {plural(accounts.admin, 'administrator')}
           </p>
         </section>
       </div>
@@ -200,7 +196,7 @@ function Accounts({ token, selfId }) {
   return (
     <>
       <div className="dash-filters" role="group" aria-label="Show">
-        {['all', 'student', 'department', 'admin'].map((r) => (
+        {['all', ...Object.keys(ROLE_NAMES)].map((r) => (
           <button
             key={r}
             type="button"
@@ -251,6 +247,13 @@ export default function AdminDashboard({ auth, theme, onOpenAssistant }) {
   const { user, token, config, changePassword, logout } = auth;
   const [tab, setTab] = useState('overview');
   const [showAccount, setShowAccount] = useState(false);
+  const [officeNames, setOfficeNames] = useState({});
+
+  useEffect(() => {
+    apiFetch('/api/offices')
+      .then((data) => setOfficeNames(Object.fromEntries(data.offices.map((o) => [o.id, o.name]))))
+      .catch(() => setOfficeNames({}));
+  }, []);
 
   return (
     <div className="app-shell">
@@ -306,6 +309,7 @@ export default function AdminDashboard({ auth, theme, onOpenAssistant }) {
         <div className="dash-tabs" role="tablist">
           {[
             ['overview', 'Overview'],
+            ['logs', 'Query logs'],
             ['accounts', 'Accounts'],
             ['documents', 'Documents'],
           ].map(([id, label]) => (
@@ -322,8 +326,15 @@ export default function AdminDashboard({ auth, theme, onOpenAssistant }) {
           ))}
         </div>
         {tab === 'overview' && <Overview token={token} />}
+        {tab === 'logs' && (
+          <QueryLog
+            path="/api/admin/logs"
+            token={token}
+            hint="Every question students asked and every document they had checked. Photos are never kept."
+          />
+        )}
         {tab === 'accounts' && <Accounts token={token} selfId={user.id} />}
-        {tab === 'documents' && <AdminDocuments token={token} />}
+        {tab === 'documents' && <AdminDocuments token={token} officeNames={officeNames} />}
       </section>
     </div>
   );

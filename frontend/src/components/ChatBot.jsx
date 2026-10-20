@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import AccountPanel from './AccountPanel.jsx';
 import AskOffice from './AskOffice.jsx';
 import AvatarStage from './AvatarStage.jsx';
+import DocCheckResult from './DocCheckResult.jsx';
+import PhotoButton from './PhotoButton.jsx';
 import SourceView from './SourceView.jsx';
 import AppMenu from './AppMenu.jsx';
 import TicketsPanel from './TicketsPanel.jsx';
@@ -184,6 +186,53 @@ export default function ChatBot({ auth, theme, onDashboard }) {
     }
   };
 
+  // A photo of a document, checked against the handbook. Text in the box goes along as a note
+  // ("my excuse letter"). The photo stays in this page; the server doesn't keep it.
+  const checkDocument = async (file) => {
+    if (!file || isSending) return;
+    const note = input.trim();
+    stop();
+    setInput('');
+    setError(null);
+    setIsSending(true);
+    const id = Date.now();
+    setMessages((prev) => [
+      ...prev,
+      { sender: 'student', text: note || 'Please check this document.', image: URL.createObjectURL(file) },
+      { id, sender: 'bot', text: '', streaming: true, thinking: 'Checking it against the handbook', citations: [] },
+    ]);
+
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      form.append('note', note);
+      // Not apiFetch: that sends JSON, and a photo is a form.
+      const res = await fetch(`${API_URL}/api/documents/check`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+      if (res.status === 401) {
+        logout();
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail ?? `Request failed (${res.status})`);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === id ? { ...m, text: data.summary, streaming: false, docCheck: data, citations: data.citations } : m,
+        ),
+      );
+      if (voiceOn) speak(data.summary);
+    } catch (err) {
+      setError(err.message);
+      setMessages((prev) => prev.filter((m) => m.id !== id));
+    } finally {
+      setIsSending(false);
+      inputRef.current?.focus();
+    }
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     ask(input.trim());
@@ -303,9 +352,10 @@ export default function ChatBot({ auth, theme, onDashboard }) {
                     {m.sender === 'bot' ? 'A.' : 'Q.'}
                   </span>
                   <div className="entry-body">
+                    {m.image && <img className="entry-photo" src={m.image} alt="The document you sent" />}
                     {m.streaming && !m.text ? (
                       <p className="thinking">
-                        Consulting the handbook
+                        {m.thinking ?? 'Consulting the handbook'}
                         <span className="thinking-rule" aria-hidden="true" />
                       </p>
                     ) : (
@@ -314,6 +364,8 @@ export default function ChatBot({ auth, theme, onDashboard }) {
                         {m.streaming && <span className="typing-caret" aria-hidden="true" />}
                       </p>
                     )}
+
+                    {m.docCheck && <DocCheckResult result={m.docCheck} />}
 
                     {m.sender === 'bot' && !m.streaming && (
                       <div className="entry-meta">
@@ -410,6 +462,7 @@ export default function ChatBot({ auth, theme, onDashboard }) {
                 maxLength={2000}
               />
             </label>
+            <PhotoButton onPhoto={checkDocument} disabled={isSending} />
             <button type="submit" className="button-primary" disabled={isSending || !input.trim()}>
               Ask
             </button>

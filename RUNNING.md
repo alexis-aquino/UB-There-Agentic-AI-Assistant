@@ -142,9 +142,15 @@ it, **Admin / Guest login** (`#/guest`) is the email-and-password door, with gue
   Google only allows plain-http sign-in from `localhost`, so the Google button works on the PC
   but not on a phone opening `http://192.168.x.x:5273` — guests' email sign-in works there.
 - **Sign-in is required** for asking questions and for the AI voice, not just to open the app.
-- **Roles.** Every account starts as a **student** (guests too). An account can also be
-  **department** staff of one office (an `id` from `backend/offices.json`) or an **admin**. Set
-  a role from `backend/` — the account must exist first:
+- **Roles.** There are four:
+  - **Guest**: signed up with the email form. Anyone, any address.
+  - **Student**: signed in with a university Google account (`@ub.edu.ph`), so the address is
+    verified. A guest account that later signs in with Google becomes a student.
+  - **Department Staff**: staff of one office (an `id` from `backend/offices.json`).
+  - **Administrator**: the whole system.
+
+  Guests and students both use the chat, "Ask an office" and the document check. Staff and admins
+  are set by an admin (Accounts tab) or from `backend/`. The account must exist first:
 
   ```
   .\.venv\Scripts\python.exe set_role.py admin@ub.edu.ph admin
@@ -152,21 +158,33 @@ it, **Admin / Guest login** (`#/guest`) is the email-and-password door, with gue
   .\.venv\Scripts\python.exe set_role.py someone@ub.edu.ph student
   ```
 
+  Before the guest role existed, every non-staff account was a student. On the first start after
+  the upgrade, those that never signed in with Google become guests. Until Google sign-in is set
+  up, make a test student with `set_role.py ... student`.
+
   A **department** account signs in to its office's **questions desk** instead of the chat: the
   questions students sent that office, waiting ones first, answered right there (the email answer
   link keeps working too). Its **Trends** tab shows the same charts as the admin overview, but
   only for the questions about that office: those matching the office's `keywords` in
   `backend/offices.json`. Questions that match no office's keywords appear only to admins.
+  **Query logs** lists those questions one by one, with the document checks about the office.
+  **Documents** is the office's own files in the knowledge base ("Department Information" in the
+  DFD): staff add files, replace or delete the ones their office added, and rebuild the index. A
+  file belongs to the office that first uploaded it; files an admin added can't be changed there.
 
   An **admin** account signs in to the **admin dashboard** ("Open the assistant" switches to the chat,
   and the chat's Menu has "Admin dashboard" to come back):
   - **Overview** — questions asked per day, how many the handbook answered, the questions it
     couldn't answer (grouped, most-asked first — where the handbook needs content), the most-cited
     pages, and each office's waiting / answered questions.
+  - **Query logs** — the student query logs: every question (answered or not, and the page it
+    came from) and every document check (the verdict and what was missing), with who asked.
+    Search them, or show only one kind.
   - **Accounts** — every account with its role; change a role (and a department's office) there
     instead of with `set_role.py`. You can't remove your own admin role.
 
-  - **Documents** (the document audit, DFD 4.0) — every file in `upload uni info here/` with
+  - **Documents** (content management, DFD 6.0) — every file in `upload uni info here/`, and the
+    office it came from, with
     whether the search index has it: *in the index*, *changed*, *new*, or *deleted*. Add or replace
     files (.pdf, .docx, .txt, .md, up to 50 MB), delete them, then **Rebuild index**: it runs in the
     background and the assistant uses the new handbook straight away — no `ingest.py`, no restart.
@@ -229,6 +247,27 @@ OPENAI_MODEL=gpt-4o-mini
   still be running**, and there's nothing to rebuild.
 - OpenAI charges per question, and questions plus handbook excerpts are sent to OpenAI.
 - To switch back, set `LLM_PROVIDER=ollama` (or delete the line) and restart.
+
+## Checking a document photo (DFD 4.0)
+
+In the chat, the **camera button** beside the question box lets a student **take a photo** or
+**choose one** (JPG, PNG or WebP, up to 8 MB) of a document such as an excuse letter or a form.
+Anything typed in the question box goes along as a note ("my excuse letter"). On a phone, "Take a photo" opens the phone's camera; on a computer it
+opens the webcam inside the app (the browser asks for camera permission, which only works on
+`localhost` or an `https://` address). Then:
+
+1. OpenAI's vision model (`OPENAI_VISION_MODEL`, default gpt-4o-mini) says what the document is,
+   and whether the photo is clear enough to read. If it isn't, the student is asked to retake it.
+2. The handbook is searched for that kind of document. **If the handbook has nothing about it,
+   the check is refused**: there are no rules to check it against.
+3. The model compares the photo with those handbook passages and lists each requirement as met,
+   missing, or unclear. "Where I got this" shows the pages.
+
+The photo is not saved anywhere, but it **is sent to OpenAI**. The result (document type,
+verdict, what was missing) is written to the query log, the DFD's audit log, so admins and the
+office it concerns see it under **Query logs**.
+This needs `OPENAI_API_KEY` in `backend\.env` even when Ollama writes the chat answers. Each
+check is a paid OpenAI call, so each student gets `DOC_CHECKS_PER_DAY` checks a day (default 10).
 
 ## What it does well, and what it won't
 

@@ -129,3 +129,32 @@ def test_only_department_staff_see_office_trends():
     assert report(sign_up()[0]).status_code == 403
     assert report(headers_for("admin")).status_code == 403
     assert report(headers_for("department", "registrar"), days=0).status_code == 422
+
+
+def test_query_logs_list_the_offices_questions_and_who_asked():
+    from app.routers import admin
+
+    log = admin.get_query_log()
+    student, _ = sign_up()
+    student_id = client.get("/api/auth/me", headers=student).json()["id"]
+    log.log_inquiry(f"{student_id}:web", "Can I drop a subject late?", False, 0.0, None)
+    log.log_inquiry(f"{student_id}:web", "Is there a tuition refund?", True, 0.7, "handbook.pdf p.3")
+    log.log_document_check(student_id, "enrollment form", "needs_fixing", ["Adviser's signature"])
+
+    entries = client.get("/api/department/logs", headers=headers_for("department", "registrar")).json()["entries"]
+    texts = [e["text"] for e in entries]
+    assert "Can I drop a subject late?" in texts and "enrollment form" in texts
+    assert "Is there a tuition refund?" not in texts
+    form = next(e for e in entries if e["text"] == "enrollment form")
+    assert form["kind"] == "document" and form["missing"] == ["Adviser's signature"]
+    assert form["student"] == "Tess"
+
+    every = client.get("/api/admin/logs?q=TUITION REFUND", headers=headers_for("admin")).json()["entries"]
+    assert every and {e["text"] for e in every} == {"Is there a tuition refund?"}
+    assert every[0]["outcome"] == "answered" and every[0]["source"] == "handbook.pdf p.3"
+
+
+def test_only_the_right_roles_read_query_logs():
+    assert client.get("/api/department/logs", headers=headers_for("admin")).status_code == 403
+    assert client.get("/api/admin/logs", headers=headers_for("department", "registrar")).status_code == 403
+    assert client.get("/api/admin/logs", headers=sign_up()[0]).status_code == 403

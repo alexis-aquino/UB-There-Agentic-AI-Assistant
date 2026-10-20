@@ -1,5 +1,5 @@
-"""The admin dashboard: inquiry trends from the query log, office workload, account roles,
-and the handbook documents (DFD process 4.0, document audit)."""
+"""The admin dashboard: inquiry trends and the student query logs, office workload, account roles,
+and the knowledge-base files (DFD process 6.0, manage content & reports)."""
 
 from functools import lru_cache
 
@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 
 from app import documents
 
-from app.auth.store import User
+from app.auth.store import ROLES, User
 from app.brain.memory import Memory
 from app.config import get_settings
 from app.routers.auth import _user_out, get_store, require_role
@@ -35,8 +35,27 @@ def report(days: int = Query(default=14, ge=1, le=90)) -> dict:
     return {
         "inquiries": get_query_log().inquiry_report(days),
         "offices": offices,
-        "accounts": {role: sum(u.role == role for u in users) for role in ("student", "department", "admin")},
+        "accounts": {role: sum(u.role == role for u in users) for role in ROLES},
     }
+
+
+def named(entries: list[dict]) -> list[dict]:
+    """Query-log entries with who asked: a name, or a note for an account that's gone."""
+    store = get_store()
+    names: dict[int, str] = {}
+    for entry in entries:
+        user_id = entry.pop("user_id")
+        if user_id is not None and user_id not in names:
+            user = store.get(user_id)
+            names[user_id] = user.name if user else "A former account"
+        entry["student"] = names.get(user_id, "Unknown") if user_id is not None else "Unknown"
+    return entries
+
+
+@router.get("/logs")
+def logs(days: int = Query(default=14, ge=1, le=90), q: str = Query(default="", max_length=100)) -> dict:
+    """The student query logs (DFD 6.0): every question and document check."""
+    return {"entries": named(get_query_log().query_log(days, q))}
 
 
 @router.get("/users", response_model=list[UserOut])
@@ -59,7 +78,7 @@ def set_role(user_id: int, body: RoleUpdate, admin: User = Depends(require_role(
     return _user_out(store.set_role(user.email, body.role, office_id))
 
 
-# ---------- documents (DFD 4.0) ----------
+# ---------- documents (DFD 6.0) ----------
 
 
 @router.get("/documents")

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { apiFetch } from '../api.js';
 import AccountPanel from './AccountPanel.jsx';
+import AdminDocuments from './AdminDocuments.jsx';
+import QueryLog from './QueryLog.jsx';
 import {
   DailyChart,
   RangePicker,
@@ -214,6 +216,8 @@ export default function DepartmentDashboard({ auth, theme }) {
           {[
             ['questions', 'Questions'],
             ['trends', 'Trends'],
+            ['logs', 'Query logs'],
+            ['documents', 'Documents'],
           ].map(([id, label]) => (
             <button
               key={id}
@@ -228,6 +232,22 @@ export default function DepartmentDashboard({ auth, theme }) {
           ))}
         </div>
         {tab === 'trends' && <OfficeTrends token={token} officeName={user.office_name} />}
+        {tab === 'logs' && (
+          <QueryLog
+            path="/api/department/logs"
+            token={token}
+            hint={`Questions and document checks about the ${user.office_name ?? 'office'}, matched by the office’s keywords.`}
+          />
+        )}
+        {tab === 'documents' && (
+          <>
+            <p className="voice-hint">
+              Your office’s documents in the assistant’s knowledge base. You can add files, and replace or delete the
+              ones your office added. Other files are managed by their office or an admin.
+            </p>
+            <AdminDocuments token={token} base="/api/department/documents" />
+          </>
+        )}
         {tab === 'questions' && (
           <>
             <div className="voice-panel-head">

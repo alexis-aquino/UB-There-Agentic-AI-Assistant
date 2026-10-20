@@ -36,7 +36,7 @@ def _in_domain(email: str) -> bool:
 def _user_out(user: User) -> UserOut:
     office = get_office(user.office_id) if user.office_id else None
     return UserOut(
-        **asdict(user), guest=not _in_domain(user.email), office_name=office.name if office else None
+        **asdict(user), guest=user.role == "guest", office_name=office.name if office else None
     )
 
 

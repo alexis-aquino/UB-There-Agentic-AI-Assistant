@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ROLE_NAMES } from '../roles.js';
 
 export default function AccountPanel({ user, defaultPassword, onChangePassword, onClose }) {
   const [current, setCurrent] = useState(user.default_password ? defaultPassword : '');
@@ -46,7 +47,10 @@ export default function AccountPanel({ user, defaultPassword, onChangePassword, 
         </div>
         <div>
           <dt>Account type</dt>
-          <dd>{user.guest ? 'Guest' : 'UB student / staff'}</dd>
+          <dd>
+            {ROLE_NAMES[user.role] ?? user.role}
+            {user.role === 'department' && user.office_name && ` · ${user.office_name}`}
+          </dd>
         </div>
       </dl>
 

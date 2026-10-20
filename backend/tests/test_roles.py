@@ -1,4 +1,4 @@
-"""Roles (student / department / admin) and which endpoints need a signed-in account."""
+"""Roles (guest / student / department / admin) and which endpoints need a signed-in account."""
 
 import sqlite3
 import uuid
@@ -22,10 +22,25 @@ def new_email():
     return f"r-{uuid.uuid4().hex[:8]}@example.com"
 
 
-def test_new_accounts_are_students():
+def test_form_sign_ups_are_guests():
     token = client.post("/api/auth/signup", json={"name": "Ivy", "email": new_email()}).json()["token"]
     me = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"}).json()
-    assert me["role"] == "student" and me["office_id"] is None
+    assert me["role"] == "guest" and me["guest"] is True and me["office_id"] is None
+
+
+def test_university_google_sign_ins_are_students():
+    user, _ = auth.get_store().sign_in_with_google(uuid.uuid4().hex, f"s-{uuid.uuid4().hex[:6]}@ub.edu.ph", "Sam", None)
+    assert user.role == "student"
+
+
+def test_a_guest_who_links_google_becomes_a_student_but_staff_keep_their_role():
+    store = auth.get_store()
+    guest, staff = new_email(), new_email()
+    store.create(guest, "Gil")
+    store.create(staff, "Sol")
+    store.set_role(staff, "department", "registrar")
+    assert store.sign_in_with_google(uuid.uuid4().hex, guest, "Gil", None)[0].role == "student"
+    assert store.sign_in_with_google(uuid.uuid4().hex, staff, "Sol", None)[0].role == "department"
 
 
 def test_set_role_shows_on_the_account():
@@ -55,7 +70,8 @@ def test_set_role_on_a_missing_account():
 
 
 def test_old_users_db_gets_the_role_columns(tmp_path):
-    """A users.db from before roles existed is upgraded, and its accounts become students."""
+    """A users.db from before roles existed is upgraded. Accounts that never used Google become
+    guests, and Google-linked ones students."""
     path = tmp_path / "users.db"
     old = sqlite3.connect(path)
     old.execute(
@@ -64,12 +80,18 @@ def test_old_users_db_gets_the_role_columns(tmp_path):
         " default_password INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"
     )
     old.execute("INSERT INTO users (email, name, password_hash) VALUES ('old@example.com', 'Old', 'x')")
+    old.execute(
+        "INSERT INTO users (email, name, password_hash, google_sub) VALUES ('ub@ub.edu.ph', 'Ub', 'x', 'g-1')"
+    )
     old.commit()
     old.close()
 
     store = UserStore(path, "12345678")
-    assert store.get_by_email("old@example.com").role == "student"
-    assert store.set_role("old@example.com", "admin").role == "admin"
+    assert store.get_by_email("old@example.com").role == "guest"
+    assert store.get_by_email("ub@ub.edu.ph").role == "student"
+    # The upgrade runs once: a role set afterwards stays, even across restarts.
+    store.set_role("old@example.com", "student")
+    assert UserStore(path, "12345678").get_by_email("old@example.com").role == "student"
 
 
 def test_require_role_lets_only_those_roles_through():

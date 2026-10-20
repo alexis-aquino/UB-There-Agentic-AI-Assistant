@@ -2330,4 +2330,182 @@
     background: var(--foil);
     animation: pulse 0.9s steps(2, start) infinite;
   }
+
+  /* ---------- document check: a photo, checked against the handbook ---------- */
+
+  .photo-button {
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .photo-button-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border: 1px solid var(--rule);
+    border-radius: 50%;
+    background: var(--surface);
+    color: var(--ink);
+    cursor: pointer;
+    transition: border-color 200ms var(--ease-out), color 200ms var(--ease-out);
+  }
+
+  .photo-button-icon:hover:not(:disabled),
+  .photo-button-icon[aria-expanded='true'] {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .photo-button-icon:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  /* The question box sits at the bottom of the page, so this menu opens upwards. */
+  .photo-button-panel {
+    top: auto;
+    bottom: calc(100% + var(--space-2));
+    right: auto;
+    left: 0;
+  }
+
+  .camera-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: grid;
+    place-items: center;
+    padding: var(--space-4);
+    background: rgba(0, 0, 0, 0.6);
+  }
+
+  .camera-sheet {
+    width: min(640px, 100%);
+    display: grid;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    background: var(--surface);
+    border-top: 3px solid var(--accent);
+    border-radius: var(--radius);
+  }
+
+  .camera-video {
+    width: 100%;
+    max-height: 65vh;
+    border-radius: var(--radius);
+    background: #000;
+    object-fit: contain;
+  }
+
+  .entry-photo {
+    display: block;
+    max-width: min(240px, 100%);
+    max-height: 240px;
+    margin-bottom: var(--space-2);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    object-fit: contain;
+    background: var(--surface-sunk);
+  }
+
+  .doc-check {
+    margin-top: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--citation);
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+
+  .doc-check.is-passed {
+    border-left-color: var(--ok);
+  }
+
+  .doc-check.is-needs_fixing {
+    border-left-color: var(--danger-text);
+  }
+
+  .doc-check-verdict {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-2) var(--space-3);
+    margin: 0;
+  }
+
+  .doc-check-badge {
+    font-size: var(--step--2);
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--citation);
+  }
+
+  .doc-check.is-passed .doc-check-badge {
+    color: var(--ok);
+  }
+
+  .doc-check.is-needs_fixing .doc-check-badge {
+    color: var(--danger-text);
+  }
+
+  .doc-check-list {
+    display: grid;
+    gap: var(--space-2);
+    margin: var(--space-3) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .doc-check-item {
+    display: grid;
+    grid-template-columns: 1.4em 1fr;
+    gap: var(--space-2);
+    font-size: var(--step--1);
+  }
+
+  .doc-check-mark {
+    font-weight: 700;
+    color: var(--muted);
+  }
+
+  .doc-check-item.is-met .doc-check-mark {
+    color: var(--ok);
+  }
+
+  .doc-check-item.is-missing .doc-check-mark {
+    color: var(--danger-text);
+  }
+
+  .doc-check-requirement {
+    display: block;
+    color: var(--ink);
+  }
+
+  .doc-check-detail {
+    display: block;
+    color: var(--muted);
+  }
+
+  @media (max-width: 560px) {
+    .composer {
+      flex-wrap: wrap;
+    }
+
+    .composer-field {
+      flex-basis: 100%;
+    }
+  }
+
+  /* ---------- query logs (DFD 6.0) ---------- */
+
+  .dash-search-form {
+    display: contents;
+  }
+
+  .dash-log td {
+    vertical-align: top;
+  }
 }

@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS users (
     google_sub TEXT UNIQUE,
     picture TEXT,
     default_password INTEGER NOT NULL DEFAULT 1,
-    role TEXT NOT NULL DEFAULT 'student',
+    role TEXT NOT NULL DEFAULT 'guest',
     office_id TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -31,9 +31,11 @@ CREATE TABLE IF NOT EXISTS meta (
 """
 
 
-# student: everyone by default (guests too). department: staff of one office (office_id).
-# admin: the whole system.
-ROLES = ("student", "department", "admin")
+# guest: signed up with the form (anyone, any email). student: signed in with a university
+# Google account (@ub.edu.ph, so the address is verified). department: staff of one office
+# (office_id). admin: the whole system. These are the DFD's Guests, Current Students,
+# University Departments and Administrator.
+ROLES = ("guest", "student", "department", "admin")
 
 # Columns added after the first release; older users.db files get them on startup.
 MIGRATIONS = {
@@ -58,7 +60,7 @@ class User:
     picture: str | None
     google_linked: bool
     default_password: bool
-    role: str = "student"
+    role: str = "guest"
     office_id: str | None = None
 
     @classmethod
@@ -92,6 +94,12 @@ class UserStore:
         for column, sql in MIGRATIONS.items():
             if column not in columns:
                 self._connection.execute(sql)
+        # Before the guest role, every non-staff account was a "student". Once, make the ones
+        # that never signed in with Google guests; after that, roles are only changed on purpose.
+        done = self._connection.execute("SELECT 1 FROM meta WHERE key = 'guest_role'").fetchone()
+        if not done:
+            self._connection.execute("UPDATE users SET role = 'guest' WHERE role = 'student' AND google_sub IS NULL")
+            self._connection.execute("INSERT INTO meta (key, value) VALUES ('guest_role', 'done')")
 
     def _signing_secret(self) -> str:
         """Generated once and kept in the db, so sessions survive restarts."""
@@ -123,13 +131,14 @@ class UserStore:
         password: str | None = None,
         google_sub: str | None = None,
         picture: str | None = None,
+        role: str = "guest",
     ) -> User:
         password = password or self.default_password
         try:
             with self._lock:
                 cursor = self._connection.execute(
-                    "INSERT INTO users (email, name, password_hash, google_sub, picture, default_password)"
-                    " VALUES (?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO users (email, name, password_hash, google_sub, picture, default_password, role)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?)",
                     (
                         email.strip(),
                         name.strip(),
@@ -137,6 +146,7 @@ class UserStore:
                         google_sub,
                         picture,
                         int(password == self.default_password),
+                        role,
                     ),
                 )
                 self._connection.commit()
@@ -155,8 +165,10 @@ class UserStore:
     ) -> tuple[User, bool]:
         """Find or create the account for a verified Google identity. Returns (user, created).
 
-        An existing email/password account with the same verified email is linked rather than
-        duplicated, so one person keeps one account however they sign in.
+        Google sign-in only accepts the university's domain, so these accounts are students. An
+        existing email/password account with the same verified email is linked rather than
+        duplicated, so one person keeps one account however they sign in; a guest account
+        linked this way becomes a student (staff and admins keep their role).
         """
         row = self._one("SELECT * FROM users WHERE google_sub = ?", (google_sub,))
         if row:
@@ -166,13 +178,14 @@ class UserStore:
         if row:
             with self._lock:
                 self._connection.execute(
-                    "UPDATE users SET google_sub = ?, picture = COALESCE(picture, ?) WHERE id = ?",
+                    "UPDATE users SET google_sub = ?, picture = COALESCE(picture, ?),"
+                    " role = CASE role WHEN 'guest' THEN 'student' ELSE role END WHERE id = ?",
                     (google_sub, picture, row["id"]),
                 )
                 self._connection.commit()
             return self.get(row["id"]), False
 
-        return self.create(email, name, google_sub=google_sub, picture=picture), True
+        return self.create(email, name, google_sub=google_sub, picture=picture, role="student"), True
 
     def change_password(self, user_id: int, current: str, new: str) -> bool:
         row = self._one("SELECT * FROM users WHERE id = ?", (user_id,))
@@ -187,7 +200,7 @@ class UserStore:
         return True
 
     def set_role(self, email: str, role: str, office_id: str | None = None) -> User:
-        """Make an account a student, an office's staff, or an admin."""
+        """Make an account a guest, a student, an office's staff, or an admin."""
         if role not in ROLES:
             raise ValueError(f"Unknown role {role!r}; use one of {', '.join(ROLES)}.")
         if (role == "department") != bool(office_id):

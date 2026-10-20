@@ -1,8 +1,11 @@
-"""Document audit (DFD process 4.0): the handbook files an admin manages from the dashboard.
+"""Content management (DFD process 6.0): the knowledge-base files ("Official University
+Information" from the admin, "Department Information" from the offices).
 
 Admins see each file in 'upload uni info here' against the last build's manifest (indexed,
 changed, new, or removed), upload, replace or delete files, and rebuild the knowledge base in
-the background. Every change is written to an audit log of who did what, and when.
+the background. Department staff do the same for their own office's files only: a file
+belongs to the office that first uploaded it, and files an admin added belong to no office.
+Every change is written to a change log of who did what, and when.
 """
 
 from __future__ import annotations
@@ -37,11 +40,17 @@ CREATE TABLE IF NOT EXISTS document_events (
     detail TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+-- Which office a file came from. Kept after a delete, so the office can upload it again.
+CREATE TABLE IF NOT EXISTS document_owners (
+    file TEXT PRIMARY KEY,
+    office_id TEXT NOT NULL
+);
 """
 
 
 class DocumentError(ValueError):
-    """Something the admin can fix: a bad name, type or size, or a missing file."""
+    """Something the uploader can fix: a bad name, type or size, a missing file, or another
+    office's file."""
 
 
 def _now() -> str:
@@ -68,11 +77,27 @@ class AuditLog:
             )
             self._connection.commit()
 
-    def recent(self, limit: int = 50) -> list[dict]:
+    def owners(self) -> dict[str, str]:
+        """{file: office_id} for files an office uploaded."""
+        with self._lock:
+            rows = self._connection.execute("SELECT file, office_id FROM document_owners").fetchall()
+        return {row["file"]: row["office_id"] for row in rows}
+
+    def set_owner(self, file: str, office_id: str) -> None:
+        with self._lock:
+            self._connection.execute(
+                "INSERT OR IGNORE INTO document_owners (file, office_id) VALUES (?, ?)", (file, office_id)
+            )
+            self._connection.commit()
+
+    def recent(self, limit: int = 50, files: set[str] | None = None) -> list[dict]:
+        """The latest changes; with `files`, only those to these files, plus rebuilds."""
         with self._lock:
             rows = self._connection.execute(
-                "SELECT * FROM document_events ORDER BY id DESC LIMIT ?", (limit,)
+                "SELECT * FROM document_events ORDER BY id DESC LIMIT ?", (limit if files is None else 1000,)
             ).fetchall()
+        if files is not None:
+            rows = [row for row in rows if row["file"] is None or row["file"] in files][:limit]
         return [
             {
                 "action": row["action"],
@@ -105,8 +130,9 @@ def check_name(name: str) -> str:
     return name
 
 
-def list_documents() -> dict:
-    """Every document on disk compared with the last build, plus files the build had that are gone."""
+def list_documents(office_id: str | None = None) -> dict:
+    """Every document on disk compared with the last build, plus files the build had that are gone.
+    With `office_id`, only that office's files."""
     manifest = builder.read_manifest()
     built = (manifest or {}).get("files", {})
     documents = []
@@ -142,6 +168,11 @@ def list_documents() -> dict:
                     "passages": before["passages"],
                 }
             )
+    owners = get_audit_log().owners()
+    for doc in documents:
+        doc["office_id"] = owners.get(doc["name"])
+    if office_id is not None:
+        documents = [doc for doc in documents if doc["office_id"] == office_id]
     return {
         "documents": documents,
         "built_at": (manifest or {}).get("built_at"),
@@ -153,8 +184,19 @@ def list_documents() -> dict:
     }
 
 
-def save_document(name: str, data: bytes, actor: str) -> bool:
-    """Write the file into the documents folder. Returns True if it replaced one."""
+def _check_office(name: str, office_id: str | None, exists: bool) -> None:
+    """Department staff may only touch their own office's files."""
+    if office_id is None:
+        return
+    owner = get_audit_log().owners().get(name)
+    if owner != office_id and (exists or owner is not None):
+        whose = "another office" if owner else "the administration"
+        raise DocumentError(f"{name} belongs to {whose}. Use a different file name, or ask an admin.")
+
+
+def save_document(name: str, data: bytes, actor: str, office_id: str | None = None) -> bool:
+    """Write the file into the documents folder. Returns True if it replaced one.
+    `office_id`: a department uploading, which may only add new files or replace its own."""
     name = check_name(name)
     if not data:
         raise DocumentError("That file is empty.")
@@ -164,19 +206,23 @@ def save_document(name: str, data: bytes, actor: str) -> bool:
     folder.mkdir(parents=True, exist_ok=True)
     target = folder / name
     replaced = target.exists()
+    _check_office(name, office_id, replaced)
     # Write beside it, then swap: a half-written upload never takes the real file's place.
     partial = folder / f".{name}.uploading"
     partial.write_bytes(data)
     partial.replace(target)
+    if office_id is not None:
+        get_audit_log().set_owner(name, office_id)
     get_audit_log().record("replaced" if replaced else "added", actor, name, f"{len(data):,} bytes")
     return replaced
 
 
-def delete_document(name: str, actor: str) -> None:
+def delete_document(name: str, actor: str, office_id: str | None = None) -> None:
     name = check_name(name)
     path = get_settings().docs_dir / name
     if not path.is_file():
         raise DocumentError("There's no document with that name.")
+    _check_office(name, office_id, True)
     path.unlink()
     get_audit_log().record("deleted", actor, name)
 

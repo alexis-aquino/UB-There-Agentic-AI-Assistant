@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     memory_db: Path = BACKEND_ROOT / "brain_memory.db"
     # Rendered pictures of source pages (see app/sources.py); safe to delete any time.
     source_cache_dir: Path = BACKEND_ROOT / "source_cache"
-    # The audit log of document changes made from the admin dashboard (DFD process 4.0).
+    # The change log of knowledge-base files changed from the dashboards (DFD process 6.0).
     documents_db: Path = BACKEND_ROOT / "documents.db"
 
     # --- AI model (LlamaIndex) ---
@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     llm_provider: LlmProvider = "ollama"
     openai_api_key: str = ""  # only read when llm_provider = "openai"
     openai_model: str = "gpt-4o-mini"
+    # Reads the photos students send to have a document checked (app/doccheck.py). Always
+    # OpenAI, whichever model writes chat replies, so it needs OPENAI_API_KEY either way.
+    openai_vision_model: str = "gpt-4o-mini"
+    doc_checks_per_day: int = 10  # per student; each check is a paid OpenAI call
     ollama_base_url: str = "http://127.0.0.1:11434"  # not "localhost": on Windows that tries IPv6 first and stalls ~2 s
     ollama_model: str = "llama3.2"
     ollama_embed_model: str = "nomic-embed-text"

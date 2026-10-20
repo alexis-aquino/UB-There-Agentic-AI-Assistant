@@ -19,7 +19,12 @@ const ACTIONS = {
 
 function when(iso) {
   if (!iso) return '';
-  return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  return new Date(iso).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }
 
 function size(bytes) {
@@ -28,8 +33,10 @@ function size(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/** Document audit (DFD 4.0): the handbook files, whether the index has them, and who changed what. */
-export default function AdminDocuments({ token }) {
+/** Knowledge-base files (DFD 6.0): whether the index has them, and who changed what.
+ *  Admins use /api/admin/documents (every file, with the office it came from); department
+ *  staff use /api/department/documents (only their office's files). */
+export default function AdminDocuments({ token, base = '/api/admin/documents', officeNames = null }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
@@ -37,13 +44,13 @@ export default function AdminDocuments({ token }) {
   const inputRef = useRef(null);
 
   const load = useCallback(() => {
-    apiFetch('/api/admin/documents', { token })
+    apiFetch(base, { token })
       .then((body) => {
         setData(body);
         setError(null);
       })
       .catch((err) => setError(err.message));
-  }, [token]);
+  }, [token, base]);
 
   useEffect(load, [load]);
 
@@ -67,7 +74,7 @@ export default function AdminDocuments({ token }) {
         const form = new FormData();
         form.append('file', file);
         // Not apiFetch: that sends JSON, and an upload is a form.
-        const res = await fetch(`${API_URL}/api/admin/documents`, {
+        const res = await fetch(`${API_URL}${base}`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
           body: form,
@@ -91,7 +98,7 @@ export default function AdminDocuments({ token }) {
     setNotice(null);
     setError(null);
     try {
-      await apiFetch(`/api/admin/documents/${encodeURIComponent(name)}`, { token, method: 'DELETE' });
+      await apiFetch(`${base}/${encodeURIComponent(name)}`, { token, method: 'DELETE' });
       setNotice(`Deleted ${name}. Rebuild the index so the assistant stops using it.`);
     } catch (err) {
       setError(err.message);
@@ -103,7 +110,7 @@ export default function AdminDocuments({ token }) {
     setNotice(null);
     setError(null);
     try {
-      await apiFetch('/api/admin/documents/rebuild', { token, method: 'POST' });
+      await apiFetch(`${base}/rebuild`, { token, method: 'POST' });
     } catch (err) {
       setError(err.message);
     }
@@ -170,14 +177,20 @@ export default function AdminDocuments({ token }) {
       )}
 
       {documents.length === 0 ? (
-        <p className="voice-hint">No documents yet. Add the student handbook to get started.</p>
+        <p className="voice-hint">
+          {officeNames
+            ? 'No documents yet. Add the student handbook to get started.'
+            : 'Your office hasn’t added any documents yet.'}
+        </p>
       ) : (
         <table className="dash-table dash-docs">
           <thead>
             <tr>
               <th scope="col">Document</th>
               <th scope="col">Status</th>
-              <th scope="col" className="num">Passages</th>
+              <th scope="col" className="num">
+                Passages
+              </th>
               <th scope="col" />
             </tr>
           </thead>
@@ -190,6 +203,8 @@ export default function AdminDocuments({ token }) {
                     {size(d.size)}
                     {d.modified && ` · changed ${when(d.modified)}`}
                     {d.pages != null && ` · ${d.pages} page${d.pages === 1 ? '' : 's'}`}
+                    {officeNames &&
+                      ` · from ${d.office_id ? (officeNames[d.office_id] ?? d.office_id) : 'the administration'}`}
                   </div>
                 </td>
                 <td>

@@ -1,4 +1,4 @@
-"""Document audit (DFD 4.0): admins manage the handbook files and rebuild the knowledge base."""
+"""Content management (DFD 6.0): admins and offices manage the knowledge-base files and rebuild it."""
 
 import pytest
 from fastapi.testclient import TestClient
@@ -145,3 +145,71 @@ def test_chat_waits_while_the_handbook_is_rebuilding(monkeypatch):
 def test_only_one_rebuild_runs_at_a_time(library, admin, monkeypatch):
     monkeypatch.setattr(documents, "_rebuild", documents.RebuildState(state="running"))
     assert client.post("/api/admin/documents/rebuild", headers=admin).status_code == 409
+
+
+# ---------- department staff: their own office's files ("Department Information") ----------
+
+
+def office_upload(headers, name, content=POLICY.encode()):
+    return client.post("/api/department/documents", files={"file": (name, content)}, headers=headers)
+
+
+def office_listing(headers):
+    response = client.get("/api/department/documents", headers=headers)
+    assert response.status_code == 200
+    return response.json()
+
+
+def test_an_office_uploads_and_sees_only_its_own_files(library, admin):
+    registrar = headers_for("department", "registrar")
+    accounting = headers_for("department", "accounting")
+    assert office_upload(registrar, "registrar-fees-a.txt").status_code == 201
+    assert upload(admin, "official-a.txt").status_code == 201
+
+    names = [d["name"] for d in office_listing(registrar)["documents"]]
+    assert names == ["registrar-fees-a.txt"]
+    assert office_listing(accounting)["documents"] == []
+    # The admin sees everything, and which office each file came from.
+    owners = {d["name"]: d["office_id"] for d in listing(admin)["documents"]}
+    assert owners["registrar-fees-a.txt"] == "registrar" and owners["official-a.txt"] is None
+    events = office_listing(registrar)["events"]
+    assert [e["file"] for e in events if e["file"]] == ["registrar-fees-a.txt"]
+
+
+def test_an_office_cant_touch_other_files(library, admin):
+    registrar = headers_for("department", "registrar")
+    accounting = headers_for("department", "accounting")
+    assert upload(admin, "official-b.txt").status_code == 201
+    assert office_upload(registrar, "registrar-b.txt").status_code == 201
+
+    refused = office_upload(accounting, "registrar-b.txt")
+    assert refused.status_code == 400 and "another office" in refused.json()["detail"]
+    assert "administration" in office_upload(registrar, "official-b.txt").json()["detail"]
+    assert client.delete("/api/department/documents/registrar-b.txt", headers=accounting).status_code == 400
+    assert client.delete("/api/department/documents/official-b.txt", headers=registrar).status_code == 400
+    assert (library / "registrar-b.txt").exists() and (library / "official-b.txt").exists()
+
+
+def test_an_office_replaces_and_deletes_its_own_file(library):
+    registrar = headers_for("department", "registrar")
+    assert office_upload(registrar, "registrar-c.txt").status_code == 201
+    assert office_upload(registrar, "registrar-c.txt", b"Newer rules.").json()["replaced"] is True
+    assert client.delete("/api/department/documents/registrar-c.txt", headers=registrar).status_code == 204
+    assert not (library / "registrar-c.txt").exists()
+    # Still the office's name, so it can put the file back.
+    assert office_upload(registrar, "registrar-c.txt").status_code == 201
+
+
+def test_an_office_rebuilds_so_its_file_is_used(library, monkeypatch):
+    registrar = headers_for("department", "registrar")
+    office_upload(registrar, "registrar-d.txt")
+    real = documents.start_rebuild
+    monkeypatch.setattr(documents, "start_rebuild", lambda actor: real(actor, background=False))
+    assert client.post("/api/department/documents/rebuild", headers=registrar).status_code == 202
+    assert office_listing(registrar)["documents"][0]["status"] == "indexed"
+
+
+def test_students_and_admins_dont_use_the_office_endpoints(admin):
+    for headers in (headers_for("student"), admin):
+        assert client.get("/api/department/documents", headers=headers).status_code == 403
+        assert office_upload(headers, "x.txt").status_code == 403

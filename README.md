@@ -66,11 +66,20 @@ cloned voice; weights are **non-commercial**), or `off`.
   model (e.g. `OLLAMA_MODEL=llama3.1:8b`) is more careful but slower.
 - **Tables in PDFs** stay hard to read — text extraction flattens them.
 
+## Document check (DFD 4.0, audit uploaded documents)
+
+Students can send a photo of a document from the chat. OpenAI's vision model checks it against
+the handbook's rules for that kind of document and lists each requirement as met or missing. If
+the handbook has nothing about that document, the check is refused. The photo is not stored; the
+result is written to the query log as the audit log (`app/doccheck.py`, see
+[RUNNING.md](RUNNING.md)).
+
 ## Accounts and dashboards
 
 Accounts exist (email/password and Google, see [RUNNING.md](RUNNING.md)), and asking questions
-needs a signed-in account. Accounts have roles (student, department, admin). Department staff get a
-questions desk for their office and the inquiry trends about it. Admins get a dashboard: inquiry trends, handbook gaps, office
-workload, account roles, and the **document audit** (DFD process 4.0): the handbook files, whether
-the index has each one, upload / replace / delete, a rebuild without restarting, and a change log
-of who did what (`app/documents.py`, `app/brain/build.py`).
+needs a signed-in account. Accounts have four roles: guest (email form), student (UB Google sign-in), department staff and administrator. Department staff get a
+questions desk for their office, plus the inquiry trends, student query logs and knowledge-base
+files for their office. Admins get a dashboard: inquiry trends, handbook gaps, the student query
+logs, office workload, account roles, and **content management** (DFD process 6.0): the
+knowledge-base files, whether the index has each one, upload / replace / delete, a rebuild without
+restarting, and a change log of who did what (`app/documents.py`, `app/brain/build.py`).

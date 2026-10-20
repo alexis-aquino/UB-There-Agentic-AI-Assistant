@@ -1,10 +1,11 @@
-r"""Give an existing account a role: student, department (one office's staff) or admin.
+r"""Give an existing account a role: guest, student, department (one office's staff) or admin.
 
 The account must exist first (sign up, sign in with Google, or create it as in STEPS TO RUN.md).
 
     .\.venv\Scripts\python.exe set_role.py admin@ub.edu.ph admin
     .\.venv\Scripts\python.exe set_role.py registrar.staff@ub.edu.ph department registrar
     .\.venv\Scripts\python.exe set_role.py someone@ub.edu.ph student
+    .\.venv\Scripts\python.exe set_role.py visitor@gmail.com guest
 
 Office ids are the "id" values in offices.json.
 """

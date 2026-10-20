@@ -2,10 +2,10 @@ import json
 import logging
 from collections.abc import Iterator
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
-from app import documents
+from app import doccheck, documents
 from app.auth.store import User
 from app.brain import engine
 from app.brain.engine import BrainNotReadyError, ModelUnavailableError
@@ -79,3 +79,19 @@ def chat_stream(query: ChatQuery, user: User = Depends(current_user)) -> Streami
     return StreamingResponse(
         events(), media_type="application/x-ndjson", headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"}
     )
+
+
+@router.post("/documents/check")
+async def check_document(
+    file: UploadFile = File(...), note: str = Form(""), user: User = Depends(current_user)
+) -> dict:
+    """A photo of a document, checked against the handbook's rules for it. Nothing is stored."""
+    _ready()
+    # One byte past the limit, so an oversized photo is refused without reading all of it.
+    image = await file.read(doccheck.MAX_IMAGE_BYTES + 1)
+    try:
+        return doccheck.check(image, user.id, note)
+    except doccheck.CheckError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ModelUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc

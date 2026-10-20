@@ -1,11 +1,14 @@
 """The query log: every student message and every reply, by conversation.
 
 This is the DFD's "D3 Query Log" — the record reports on inquiry trends are built from.
-`inquiries` keeps one row per handbook question with how it went, for the admin dashboard.
+`inquiries` keeps one row per handbook question with how it went, for the dashboards.
+`document_checks` is the audit log of DFD process 4.0: one row per document photo checked
+(the photo itself is never stored).
 """
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import threading
 from collections.abc import Callable
@@ -32,7 +35,22 @@ CREATE TABLE IF NOT EXISTS inquiries (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_inquiries_created ON inquiries(created_at);
+
+CREATE TABLE IF NOT EXISTS document_checks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    document_type TEXT NOT NULL,
+    status TEXT NOT NULL,
+    missing TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_document_checks_created ON document_checks(created_at);
 """
+
+
+def _iso(timestamp: str) -> str:
+    # SQLite's CURRENT_TIMESTAMP is UTC without a zone; say so, so browsers show local time.
+    return f"{timestamp.replace(' ', 'T')}Z"
 
 
 class Memory:
@@ -64,6 +82,75 @@ class Memory:
                 (session_id, question, int(answered), confidence, source),
             )
             self._connection.commit()
+
+    def log_document_check(self, user_id: int, document_type: str, status: str, missing: list[str]) -> None:
+        """One document photo checked (DFD 4.0's audit log): what it was and how it went."""
+        with self._lock:
+            self._connection.execute(
+                "INSERT INTO document_checks (user_id, document_type, status, missing) VALUES (?, ?, ?, ?)",
+                (user_id, document_type, status, json.dumps(missing)),
+            )
+            self._connection.commit()
+
+    def query_log(
+        self,
+        days: int,
+        search: str = "",
+        include: Callable[[str], bool] | None = None,
+        limit: int = 300,
+    ) -> list[dict]:
+        """The student query logs: each question and each document check over the last `days`
+        days, newest first. `search` matches the question or document type; `include` keeps
+        only the entries whose text it accepts (one office's, for its department)."""
+        since = f"-{days - 1} days"
+        like = f"%{search.strip().lower()}%"
+        with self._lock:
+            self._connection.create_function(
+                "in_scope", 1, (lambda q: int(include(q))) if include else (lambda q: 1), deterministic=True
+            )
+            questions = self._connection.execute(
+                "SELECT session_id, question, answered, source, created_at FROM inquiries"
+                " WHERE created_at >= date('now', ?) AND lower(question) LIKE ? AND in_scope(question)"
+                " ORDER BY id DESC LIMIT ?",
+                (since, like, limit),
+            ).fetchall()
+            checks = self._connection.execute(
+                "SELECT user_id, document_type, status, missing, created_at FROM document_checks"
+                " WHERE created_at >= date('now', ?) AND lower(document_type) LIKE ? AND in_scope(document_type)"
+                " ORDER BY id DESC LIMIT ?",
+                (since, like, limit),
+            ).fetchall()
+
+        def user_of(session_id: str) -> int | None:
+            # Chat sessions are "<user id>:<the browser's session id>" (see routers/chat.py).
+            head = session_id.split(":", 1)[0]
+            return int(head) if head.isdigit() and ":" in session_id else None
+
+        entries = [
+            {
+                "kind": "question",
+                "at": _iso(row["created_at"]),
+                "user_id": user_of(row["session_id"]),
+                "text": row["question"],
+                "outcome": "answered" if row["answered"] else "not_found",
+                "source": row["source"],
+                "missing": [],
+            }
+            for row in questions
+        ] + [
+            {
+                "kind": "document",
+                "at": _iso(row["created_at"]),
+                "user_id": row["user_id"],
+                "text": row["document_type"],
+                "outcome": row["status"],
+                "source": None,
+                "missing": json.loads(row["missing"]),
+            }
+            for row in checks
+        ]
+        entries.sort(key=lambda e: e["at"], reverse=True)
+        return entries[:limit]
 
     def inquiry_report(
         self,
@@ -130,7 +217,7 @@ class Memory:
                 {
                     "question": row["question"],
                     "count": row["n"],
-                    "last_asked": f"{row['last_asked'].replace(' ', 'T')}Z",
+                    "last_asked": _iso(row["last_asked"]),
                 }
                 for row in unanswered
             ],
