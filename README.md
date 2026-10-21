@@ -68,11 +68,12 @@ cloned voice; weights are **non-commercial**), or `off`.
 
 ## Document check (DFD 4.0, audit uploaded documents)
 
-Students can send a photo of a document from the chat. OpenAI's vision model checks it against
-the handbook's rules for that kind of document and lists each requirement as met or missing. If
-the handbook has nothing about that document, the check is refused. The photo is not stored; the
-result is written to the query log as the audit log (`app/doccheck.py`, see
-[RUNNING.md](RUNNING.md)).
+Students can send a photo of a document from the chat. OpenCV straightens the page, judges the
+photo and finds signatures, stamps and pasted photos; Tesseract OCR reads its text; the chat's own
+model then checks that reading against the handbook's rules for that kind of document and lists
+each requirement as met or missing. If the handbook has nothing about that document, the check is
+refused. The photo is not stored or sent anywhere; the result is written to the query log as the
+audit log (`app/vision.py`, `app/doccheck.py`, see [RUNNING.md](RUNNING.md)).
 
 ## Accounts and dashboards
 

@@ -80,6 +80,41 @@ def get_llm() -> LLM:
 
 
 @lru_cache
+def get_json_llm() -> LLM:
+    """The same model as get_llm, set to answer in JSON with room for a longer reply: the
+    document check (app/doccheck.py) asks it for a verdict per requirement."""
+    settings = get_settings()
+    if settings.llm_provider == "mock":
+        return ExtractiveMockLLM()
+
+    if settings.llm_provider == "openai":
+        from llama_index.llms.openai import OpenAI
+
+        return OpenAI(
+            model=settings.openai_model,
+            api_key=settings.openai_api_key,
+            temperature=0,
+            max_tokens=900,
+            timeout=60.0,
+            max_retries=2,
+            additional_kwargs={"response_format": {"type": "json_object"}},
+        )
+
+    from llama_index.llms.ollama import Ollama
+
+    return Ollama(
+        model=settings.ollama_model,
+        base_url=settings.ollama_base_url,
+        temperature=0,
+        context_window=4096,
+        request_timeout=120.0,
+        keep_alive="30m",
+        json_mode=True,
+        additional_kwargs={"num_predict": 900},
+    )
+
+
+@lru_cache
 def get_embed_model() -> BaseEmbedding:
     settings = get_settings()
     if settings.llm_provider == "mock":

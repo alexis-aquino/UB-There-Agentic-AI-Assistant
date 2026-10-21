@@ -263,18 +263,35 @@ Anything typed in the question box goes along as a note ("my excuse letter"). On
 opens the webcam inside the app (the browser asks for camera permission, which only works on
 `localhost` or an `https://` address). Then:
 
-1. OpenAI's vision model (`OPENAI_VISION_MODEL`, default gpt-4o-mini) says what the document is,
-   and whether the photo is clear enough to read. If it isn't, the student is asked to retake it.
-2. The handbook is searched for that kind of document. **If the handbook has nothing about it,
-   the check is refused**: there are no rules to check it against.
-3. The model compares the photo with those handbook passages and lists each requirement as met,
-   missing, or unclear. "Where I got this" shows the pages.
+1. **OpenCV** (`app/vision.py`) finds the page's edges and straightens it, and judges the photo:
+   blurry, too dark, washed out or low contrast. It cleans the page up and **Tesseract OCR** reads
+   its text. OpenCV also looks for a **signature or handwriting**, a **stamp or seal**, and a
+   **pasted ID photo**, by shape and colour. If too little text could be read, the student is
+   told what was wrong with the photo and asked to retake it.
+2. The chat's own model (`LLM_PROVIDER`, llama3.2 by default) names the document from that
+   reading, and the handbook is searched for that kind of document. **If the handbook has nothing
+   about it, the check is refused**: there are no rules to check it against.
+3. The model compares the reading (the text, and the marks found) with those handbook passages
+   and lists each requirement as met, missing, or unclear. "Where I got this" shows the pages, and
+   the trace shows what OpenCV found.
 
-The photo is not saved anywhere, but it **is sent to OpenAI**. The result (document type,
+The photo is not saved anywhere and, with Ollama, never leaves this PC. The result (document type,
 verdict, what was missing) is written to the query log, the DFD's audit log, so admins and the
 office it concerns see it under **Query logs**.
-This needs `OPENAI_API_KEY` in `backend\.env` even when Ollama writes the chat answers. Each
-check is a paid OpenAI call, so each student gets `DOC_CHECKS_PER_DAY` checks a day (default 10).
+**Install Tesseract once** (it is a program, not a Python package):
+
+```powershell
+winget install --id UB-Mannheim.TesseractOCR
+```
+
+or the installer from https://github.com/UB-Mannheim/tesseract/wiki. It is found on the PATH or in
+`C:\Program Files\Tesseract-OCR`; if it is elsewhere, set `TESSERACT_CMD` in `backend\.env`. Then
+restart the backend. Without it, the document check says Tesseract is missing and everything else
+works. Each student gets `DOC_CHECKS_PER_DAY` checks a day (default 10).
+
+OpenCV's marks are found by shape and colour, not understood: a coloured logo low on the page can
+count as a stamp, and a faint pencil signature can be missed. The model is told to treat them as
+hints, and a requirement it can't confirm is listed as "unclear" rather than met.
 
 ## What it does well, and what it won't
 

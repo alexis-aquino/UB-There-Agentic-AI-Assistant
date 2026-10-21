@@ -34,10 +34,10 @@ class Settings(BaseSettings):
     llm_provider: LlmProvider = "ollama"
     openai_api_key: str = ""  # only read when llm_provider = "openai"
     openai_model: str = "gpt-4o-mini"
-    # Reads the photos students send to have a document checked (app/doccheck.py). Always
-    # OpenAI, whichever model writes chat replies, so it needs OPENAI_API_KEY either way.
-    openai_vision_model: str = "gpt-4o-mini"
-    doc_checks_per_day: int = 10  # per student; each check is a paid OpenAI call
+    # The document check (app/doccheck.py) reads photos with OpenCV and Tesseract OCR, then the
+    # reply model above judges them. Empty = find tesseract on the PATH or in Program Files.
+    tesseract_cmd: str = ""
+    doc_checks_per_day: int = 10  # per student; each check runs OCR and two model calls
     ollama_base_url: str = "http://127.0.0.1:11434"  # not "localhost": on Windows that tries IPv6 first and stalls ~2 s
     ollama_model: str = "llama3.2"
     ollama_embed_model: str = "nomic-embed-text"
