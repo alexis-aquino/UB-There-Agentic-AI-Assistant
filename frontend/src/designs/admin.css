@@ -1,0 +1,1048 @@
+/* The admin dashboard, in the handbook's look: a registrar's ledger — ruled columns,
+   tabular figures, one maroon (gold by lamplight) ink for every chart mark. Tokens come from
+   handbook.css. */
+
+:root[data-design='handbook'] {
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .adm-shell {
+    padding-bottom: var(--space-7);
+
+    .notice {
+      margin-bottom: var(--space-5);
+    }
+  }
+
+  .adm-head-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+  }
+
+  /* ---------- cover: the month's title ---------- */
+
+  /* Title on the left, month dropdown pinned top-right: a longer or shorter period name
+     never pushes the dropdown around. */
+  .adm-cover {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: var(--space-4);
+    margin-bottom: var(--space-5);
+    animation: rise 600ms var(--ease-out) both;
+    /* The animation makes this its own layer; lift it so the month dropdown opens over the ledger. */
+    position: relative;
+    z-index: 10;
+  }
+
+  .adm-cover .label {
+    margin: 0;
+    color: var(--citation);
+  }
+
+  .adm-title {
+    margin: var(--space-1) 0 0;
+    font-family: var(--font-display);
+    font-size: var(--step-4);
+    font-weight: 500;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    color: var(--ink);
+  }
+
+  /* The report period: one dropdown for one month, several, or all. */
+  .adm-picker {
+    position: relative;
+    max-width: 100%;
+  }
+
+  .adm-picker-button {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    column-gap: var(--space-3);
+    width: 300px; /* fixed, so the button doesn't grow or shrink with its label */
+    max-width: 100%;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 200ms var(--ease-out);
+
+    .label {
+      grid-column: 1 / -1;
+      margin: 0;
+    }
+
+    &:hover,
+    &[aria-expanded='true'] {
+      border-color: var(--accent);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--focus);
+      outline-offset: 2px;
+    }
+  }
+
+  .adm-picker-value {
+    overflow: hidden;
+    font-size: var(--step--1);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .adm-picker-caret {
+    color: var(--muted);
+  }
+
+  .adm-picker-panel {
+    position: absolute;
+    top: calc(100% + var(--space-1));
+    right: 0;
+    z-index: 20;
+    display: grid;
+    gap: var(--space-2);
+    width: min(320px, calc(100vw - 32px));
+    padding: var(--space-3);
+    border: 1px solid var(--rule-strong);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: 0 12px 32px rgb(0 0 0 / 0.18);
+  }
+
+  .adm-picker-hint {
+    margin: 0;
+    font-size: var(--step--2);
+    color: var(--muted);
+
+    strong {
+      color: var(--ink);
+    }
+  }
+
+  .adm-picker-yearrow {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: var(--space-3);
+
+    label {
+      display: grid;
+      gap: var(--space-1);
+    }
+
+    .label {
+      margin: 0;
+    }
+
+    input {
+      width: 16ch;
+      min-height: 38px;
+      padding: var(--space-2) var(--space-3);
+      border: 1px solid var(--rule);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--ink);
+      font: inherit;
+      font-size: var(--step-0);
+      font-variant-numeric: tabular-nums;
+    }
+
+    input:focus-visible {
+      outline: 2px solid var(--focus);
+      outline-offset: 2px;
+    }
+
+    .link-button {
+      font-size: var(--step--1);
+    }
+  }
+
+  /* One Jan–Dec block per typed year; a long span scrolls. */
+  .adm-picker-years {
+    display: grid;
+    gap: var(--space-3);
+    max-height: 320px;
+    overflow-y: auto;
+    padding-right: var(--space-1);
+  }
+
+  .adm-picker-yearname {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    cursor: pointer;
+
+    input {
+      accent-color: var(--accent);
+    }
+
+    margin: 0;
+    padding-bottom: 2px;
+    border-bottom: 1px solid var(--rule);
+    font-size: var(--step--2);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: var(--citation);
+  }
+
+  /* Jan–Dec of a year, three to a row. */
+  .adm-picker-months {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-1) var(--space-2);
+  }
+
+  .adm-picker-option {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 2px 0;
+    font-size: var(--step--1);
+    color: var(--ink);
+    cursor: pointer;
+
+    input {
+      accent-color: var(--accent);
+    }
+
+    /* A month with no questions can still be picked; it just reads quieter. */
+    &.is-empty {
+      color: var(--muted);
+    }
+
+    /* Sits right above the months it stands for. */
+    &.is-all {
+      padding: var(--space-2) 0;
+      border-bottom: 1px solid var(--rule);
+      font-weight: 600;
+    }
+  }
+
+  .adm-picker-foot {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: var(--space-3);
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--rule);
+  }
+
+  @media (max-width: 600px) {
+    .adm-cover {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .adm-picker,
+    .adm-picker-button {
+      width: 100%;
+    }
+
+    .adm-picker-panel {
+      left: 0;
+      right: auto;
+    }
+  }
+
+  .adm-filter-row select,
+  .adm-filter-row input[type='search'] {
+    min-height: 38px;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    font-size: var(--step--1);
+  }
+
+  .adm-filter-row :is(select, input):focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  /* ---------- ledger: the month in six figures ---------- */
+
+  .adm-ledger {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    margin: 0 0 var(--space-6);
+    border-top: 3px solid var(--rule-strong);
+    border-bottom: 1px solid var(--rule-strong);
+    animation: rise 700ms 80ms var(--ease-out) both;
+
+    > div {
+      padding: var(--space-4) var(--space-4) var(--space-4) 0;
+      border-right: 1px solid var(--rule);
+    }
+
+    > div + div {
+      padding-left: var(--space-4);
+    }
+
+    > div:last-child {
+      border-right: none;
+    }
+
+    dt {
+      font-size: var(--step--2);
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    dd {
+      margin: var(--space-1) 0 0;
+      font-family: var(--font-display);
+      font-size: var(--step-3);
+      font-weight: 500;
+      line-height: 1.1;
+      font-variant-numeric: tabular-nums;
+      color: var(--ink);
+    }
+  }
+
+  .adm-delta {
+    display: block;
+    font-size: var(--step--2);
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- sections ---------- */
+
+  .adm-columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--space-6);
+  }
+
+  /* Asked questions · Inquiry trends · Inquiry tracker, one at a time. */
+  .adm-tabs {
+    display: flex;
+    gap: var(--space-1);
+    margin-bottom: var(--space-5);
+    flex-wrap: wrap; /* wraps on a phone instead of scrolling */
+    border-bottom: 1px solid var(--rule-strong);
+    animation: rise 700ms 120ms var(--ease-out) both;
+
+    button {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      margin-bottom: -1px;
+      padding: var(--space-2) var(--space-4);
+      border: 1px solid transparent;
+      border-bottom: none;
+      border-radius: var(--radius) var(--radius) 0 0;
+      background: transparent;
+      color: var(--ink-soft);
+      font: inherit;
+      font-size: var(--step--1);
+      font-weight: 600;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: color 200ms var(--ease-out);
+    }
+
+    button:hover {
+      color: var(--accent);
+    }
+
+    button[aria-selected='true'] {
+      border-color: var(--rule-strong);
+      background: var(--surface);
+      color: var(--ink);
+    }
+
+    button:focus-visible {
+      outline: 2px solid var(--focus);
+      outline-offset: -2px;
+    }
+  }
+
+  /* A tab's content needs no top rule of its own: the tab strip is one. */
+  .adm-view.adm-section > h3:first-child,
+  .adm-view .adm-section > h3:first-child,
+  .adm-view .adm-tracker-head h3 {
+    padding-top: 0;
+    border-top: none;
+  }
+
+  .adm-section {
+    margin-bottom: var(--space-6);
+    animation: rise 700ms 160ms var(--ease-out) both;
+
+    h3 {
+      margin: 0;
+      padding-top: var(--space-3);
+      border-top: 1px solid var(--rule-strong);
+      font-family: var(--font-display);
+      font-size: var(--step-2);
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: var(--ink);
+    }
+  }
+
+  .adm-sub {
+    margin: var(--space-1) 0 var(--space-4);
+    font-size: var(--step--1);
+    color: var(--muted);
+  }
+
+  /* ---------- top topics: ranked bars, one ink ---------- */
+
+  .adm-bars {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+
+    button {
+      display: grid;
+      grid-template-columns: 1.6rem minmax(0, 1fr) auto;
+      grid-template-areas:
+        'rank name count'
+        'rank track track'
+        'rank delta delta';
+      column-gap: var(--space-2);
+      row-gap: 2px;
+      width: 100%;
+      padding: var(--space-2) var(--space-2) var(--space-3);
+      border: none;
+      border-bottom: 1px solid var(--rule);
+      background: none;
+      color: inherit;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+      transition: background 200ms var(--ease-out);
+    }
+
+    button:hover,
+    button.is-active {
+      background: var(--surface);
+    }
+
+    button.is-active .adm-bar-name {
+      color: var(--accent);
+    }
+  }
+
+  .adm-bar-rank {
+    grid-area: rank;
+    font-family: var(--font-display);
+    font-style: italic;
+    color: var(--citation);
+  }
+
+  .adm-bar-name {
+    grid-area: name;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .adm-bar-count {
+    grid-area: count;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: var(--ink);
+
+    small {
+      font-weight: 400;
+      color: var(--muted);
+    }
+  }
+
+  .adm-bar-track {
+    grid-area: track;
+    height: 8px;
+    margin: 3px 0;
+
+    span {
+      display: block;
+      height: 100%;
+      min-width: 4px;
+      border-radius: 0 4px 4px 0;
+      background: var(--accent);
+      transform-origin: left;
+      animation: adm-grow 800ms 250ms var(--ease-out) both;
+    }
+  }
+
+  .adm-bars .adm-delta {
+    grid-area: delta;
+  }
+
+  /* ---------- most asked questions ---------- */
+
+  .adm-top {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+
+    li {
+      display: grid;
+      grid-template-columns: 3rem minmax(0, 1fr);
+      gap: var(--space-2);
+      padding: var(--space-3) 0;
+      border-bottom: 1px solid var(--rule);
+    }
+  }
+
+  .adm-top-count {
+    font-family: var(--font-display);
+    font-size: var(--step-1);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--citation);
+  }
+
+  .adm-top-question {
+    margin: 0;
+    font-family: var(--font-display);
+    font-style: italic;
+    color: var(--ink);
+  }
+
+  .adm-top-meta {
+    margin: var(--space-1) 0 0;
+    font-size: var(--step--2);
+    color: var(--muted);
+  }
+
+  /* ---------- trends: topic × month grid ---------- */
+
+  /* Tables fit the page; no scroll bar. Only a phone too narrow for the grid can swipe it sideways. */
+  .adm-scroll {
+    overflow: visible;
+  }
+
+  .adm-heat {
+    width: 100%;
+    table-layout: fixed; /* the month columns share the width, however many there are */
+    border-collapse: separate;
+    border-spacing: 2px;
+    font-variant-numeric: tabular-nums;
+
+    th {
+      font-size: var(--step--1);
+      font-weight: 600;
+      color: var(--ink-soft);
+      text-align: left;
+      white-space: nowrap;
+      padding: var(--space-1) var(--space-3) var(--space-1) 0;
+    }
+
+    thead th {
+      font-size: var(--step--2);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    thead th:first-child {
+      text-align: left;
+    }
+
+    .adm-heat-year {
+      display: block;
+      font-size: 0.85em;
+      letter-spacing: 0.04em;
+      opacity: 0.75;
+    }
+
+    /* Two or three years of months on one page: tighter headers and figures. */
+    &.is-compact {
+      thead th:not(:first-child):not(:last-child) {
+        padding: var(--space-1) 0;
+        letter-spacing: 0;
+      }
+
+      .adm-heat-year {
+        overflow: visible;
+        font-size: 0.8em;
+        letter-spacing: 0;
+        text-align: left;
+      }
+
+      td {
+        font-size: var(--step--2);
+      }
+    }
+
+    /* Topic names stay in view while the months scroll on a phone. */
+    tbody th,
+    tfoot th,
+    thead th:first-child {
+      position: sticky;
+      left: 0;
+      z-index: 1;
+      background: var(--bg);
+      white-space: normal; /* long topic names wrap inside their column */
+    }
+
+    thead th:first-child {
+      width: 11rem;
+    }
+
+    thead th:last-child {
+      width: 3.5rem;
+    }
+
+    td {
+      height: 2.2rem;
+      text-align: center;
+      font-size: var(--step--1);
+      color: var(--ink);
+      border-radius: var(--radius);
+      /* One hue, light to dark: how often the topic was asked that month. */
+      background: color-mix(in oklab, var(--accent) var(--heat, 0%), var(--surface-sunk));
+    }
+
+    td.is-strong {
+      color: var(--accent-ink);
+      font-weight: 600;
+    }
+
+    tfoot th,
+    tfoot td {
+      padding-top: var(--space-2);
+      border-top: 1px solid var(--rule-strong);
+      background: none;
+      font-weight: 600;
+      border-radius: 0;
+    }
+
+    tfoot th {
+      background: var(--bg);
+    }
+
+    .adm-heat-total {
+      background: none;
+      font-weight: 600;
+      color: var(--ink-soft);
+    }
+  }
+
+  /* ---------- tracker ---------- */
+
+  .adm-tracker-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: var(--space-4);
+
+    > div {
+      flex: 1;
+    }
+
+    .adm-sub {
+      margin-bottom: var(--space-3);
+    }
+  }
+
+  .adm-count {
+    margin-bottom: var(--space-3);
+    font-size: var(--step--1);
+    font-weight: 600;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .adm-filters {
+    display: grid;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+  }
+
+  .adm-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+
+    button {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-1) var(--space-3);
+      border: 1px solid var(--rule);
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--ink-soft);
+      font: inherit;
+      font-size: var(--step--1);
+      cursor: pointer;
+      transition: border-color 200ms var(--ease-out), color 200ms var(--ease-out);
+    }
+
+    button:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    button[aria-pressed='true'] {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: var(--accent-ink);
+    }
+  }
+
+  .adm-chip-n {
+    font-size: var(--step--2);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.8;
+  }
+
+  .adm-filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3);
+
+    input[type='search'] {
+      flex: 1 1 220px;
+    }
+  }
+
+  .adm-log {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--step--1);
+
+    th {
+      padding: var(--space-2) var(--space-3) var(--space-2) 0;
+      border-bottom: 1px solid var(--rule-strong);
+      font-size: var(--step--2);
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    td {
+      padding: var(--space-3) var(--space-3) var(--space-3) 0;
+      border-bottom: 1px solid var(--rule);
+      vertical-align: top;
+    }
+
+    tr.is-open td {
+      border-bottom-color: transparent;
+    }
+  }
+
+  .adm-log-question {
+    max-width: 46ch;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--ink);
+    font-family: var(--font-display);
+    font-size: var(--step-0);
+    font-style: italic;
+    text-align: left;
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    text-underline-offset: 3px;
+    transition: text-decoration-color 200ms var(--ease-out);
+
+    &:hover,
+    &[aria-expanded='true'] {
+      text-decoration-color: var(--foil);
+    }
+  }
+
+  .adm-log-muted {
+    color: var(--ink-soft);
+  }
+
+  .adm-log-ref {
+    display: block;
+    margin-top: var(--space-1);
+    font-size: var(--step--2);
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .adm-log-detail td {
+    padding: 0 0 var(--space-4) var(--space-4);
+    background: var(--surface);
+  }
+
+  .adm-more {
+    margin-top: var(--space-4);
+  }
+
+  /* State pills: a word, not just a color. */
+  .adm-pill {
+    display: inline-block;
+    padding: 1px var(--space-2);
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    font-size: var(--step--2);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+
+    &.is-ok { color: var(--ok); }
+    &.is-warn { color: var(--citation); }
+    &.is-wait { color: var(--q-mark); }
+    &.is-danger { color: var(--danger-text); }
+    &.is-muted { color: var(--muted); }
+  }
+
+  /* ---------- flagged inquiries ---------- */
+
+  .adm-log tr.is-flagged:not(.adm-log-detail) > td:first-child {
+    box-shadow: inset 3px 0 0 var(--danger-text);
+  }
+
+  .adm-chips .adm-chip-flag[aria-pressed='true'] {
+    border-color: var(--danger-text);
+    background: var(--danger-text);
+    color: var(--surface);
+  }
+
+  .adm-flag {
+    display: grid;
+    gap: var(--space-2);
+    margin-top: var(--space-4);
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--rule);
+  }
+
+  .adm-flag-status {
+    margin: 0;
+    font-size: var(--step--1);
+    color: var(--ink-soft);
+
+    .adm-pill {
+      margin-right: var(--space-2);
+    }
+  }
+
+  /* ---------- an inquiry's track ---------- */
+
+  .adm-timeline {
+    margin: 0;
+    padding: var(--space-4) 0 0;
+    list-style: none;
+
+    li {
+      position: relative;
+      display: grid;
+      grid-template-columns: 18px minmax(0, 1fr);
+      gap: var(--space-3);
+      padding-bottom: var(--space-4);
+    }
+
+    /* The rule joining one step to the next. */
+    li:not(:last-child)::before {
+      content: '';
+      position: absolute;
+      left: 8px;
+      top: 16px;
+      bottom: 0;
+      width: 2px;
+      background: var(--rule);
+    }
+
+    li.is-done:not(:last-child)::before {
+      background: var(--foil);
+    }
+
+    li:last-child {
+      padding-bottom: var(--space-2);
+    }
+  }
+
+  .adm-timeline-dot {
+    width: 18px;
+    height: 18px;
+    margin-top: 1px;
+    border: 2px solid var(--rule);
+    border-radius: 50%;
+    background: var(--surface);
+  }
+
+  .is-done > .adm-timeline-dot {
+    border-color: var(--foil);
+    background: var(--foil);
+    box-shadow: inset 0 0 0 3px var(--surface);
+  }
+
+  .is-warn > .adm-timeline-dot {
+    border-color: var(--citation);
+  }
+
+  .is-stopped > .adm-timeline-dot {
+    border-color: var(--danger-text);
+    background: var(--danger-bg);
+  }
+
+  .is-current > .adm-timeline-dot {
+    border-color: var(--q-mark);
+    animation: pulse 1.6s var(--ease-in-out) infinite;
+  }
+
+  .is-idle > .adm-timeline-dot {
+    border-style: dashed;
+  }
+
+  .adm-timeline-title {
+    margin: 0;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .is-idle .adm-timeline-title {
+    color: var(--muted);
+  }
+
+  .adm-timeline-at {
+    margin-left: var(--space-3);
+    font-size: var(--step--2);
+    font-weight: 400;
+    color: var(--muted);
+  }
+
+  .adm-timeline-detail {
+    margin: 2px 0 0;
+    font-size: var(--step--1);
+    color: var(--ink-soft);
+  }
+
+  .adm-timeline-quote {
+    margin: var(--space-2) 0 0;
+    padding-left: var(--space-3);
+    border-left: 2px solid var(--foil);
+    font-family: var(--font-display);
+    font-style: italic;
+    color: var(--ink);
+    white-space: pre-wrap;
+  }
+
+  /* ---------- narrow screens ---------- */
+
+  @media (max-width: 960px) {
+    .adm-ledger {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+
+      > div:nth-child(3n) {
+        border-right: none;
+      }
+
+      > div:nth-child(n + 4) {
+        border-top: 1px solid var(--rule);
+      }
+
+      > div:nth-child(3n + 1) {
+        padding-left: 0;
+      }
+    }
+
+    .adm-columns {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .adm-scroll:has(.adm-heat) {
+      overflow-x: auto;
+      scrollbar-width: none;
+
+      &::-webkit-scrollbar {
+        display: none;
+      }
+
+      .adm-heat {
+        min-width: 34rem;
+      }
+    }
+
+    .adm-ledger {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+
+      > div,
+      > div:nth-child(3n) {
+        border-right: 1px solid var(--rule);
+        padding-left: var(--space-3);
+      }
+
+      > div:nth-child(2n) {
+        border-right: none;
+      }
+
+      > div:nth-child(2n + 1) {
+        padding-left: 0;
+      }
+
+      > div:nth-child(n + 3) {
+        border-top: 1px solid var(--rule);
+      }
+
+      dd {
+        font-size: var(--step-2);
+      }
+    }
+
+    .adm-head-actions .theme-toggle-text {
+      display: none;
+    }
+
+    /* The log becomes a stack of cards: question first, the rest beneath. */
+    .adm-log {
+      thead {
+        display: none;
+      }
+
+      tr,
+      td {
+        display: block;
+      }
+
+      tr:not(.adm-log-detail) {
+        padding: var(--space-3) 0;
+        border-bottom: 1px solid var(--rule);
+      }
+
+      td {
+        padding: 0 0 var(--space-1);
+        border: none;
+      }
+
+      .adm-log-detail td {
+        padding: 0 var(--space-3) var(--space-3);
+      }
+    }
+  }
+}
+
+@keyframes adm-grow {
+  from {
+    transform: scaleX(0);
+  }
+}

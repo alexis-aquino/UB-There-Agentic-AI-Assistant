@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 /**
  * Every setting behind one "Menu" button, so the header stays clean: voice on/off, voice
- * settings, my questions, account, light/dark mode and sign out. Toggles keep the menu open
+ * settings, my questions, account, the admin dashboard (admins only), light/dark mode and sign out. Toggles keep the menu open
  * so you can see the change; the rest open their panel and close it.
  */
 export default function AppMenu({
@@ -12,6 +12,7 @@ export default function AppMenu({
   onVoiceSettings,
   onMyQuestions,
   onAccount,
+  onAdmin,
   theme,
   onToggleTheme,
   onSignOut,
@@ -74,6 +75,11 @@ export default function AppMenu({
           <button type="button" role="menuitem" onClick={thenClose(onAccount)}>
             Account
           </button>
+          {onAdmin && (
+            <button type="button" role="menuitem" onClick={thenClose(onAdmin)}>
+              Admin dashboard
+            </button>
+          )}
           <button type="button" role="menuitemcheckbox" aria-checked={theme === 'dark'} onClick={onToggleTheme}>
             Dark mode
             <span className="app-menu-state">{theme === 'dark' ? 'On' : 'Off'}</span>
