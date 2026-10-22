@@ -2,6 +2,8 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import { STATES, buildReport, filterRecords, monthOf, stateOf } from '../admin/report.js';
 import { TOPICS, loadQueryLog } from '../admin/sampleData.js';
 import { monthName, periodName, readYears, yearMonths } from '../admin/months.js';
+import AdminAccounts from './AdminAccounts.jsx';
+import AdminKnowledge from './AdminKnowledge.jsx';
 import MonthPicker from './MonthPicker.jsx';
 import ThemeToggle from './ThemeToggle.jsx';
 
@@ -14,6 +16,17 @@ const VIEWS = [
   ['trends', 'Inquiry trends'],
   ['tracker', 'Inquiry tracker'],
 ];
+// The dashboard's parts. The report keeps its own tabs (#admin/questions …); the others are
+// #admin/accounts and #admin/knowledge.
+const SECTIONS = [
+  ['report', 'Inquiry report'],
+  ['accounts', 'Accounts'],
+  ['knowledge', 'Knowledge base'],
+];
+const sectionFromHash = () => {
+  const hash = window.location.hash.split('/')[1];
+  return hash === 'accounts' || hash === 'knowledge' ? hash : 'report';
+};
 const viewFromHash = () => {
   const hash = window.location.hash.split('/')[1];
   return VIEWS.some(([key]) => key === hash) ? hash : 'questions';
@@ -180,67 +193,216 @@ function Timeline({ q }) {
   );
 }
 
-/** Topics × months, shaded by how often each was asked. A table, so it reads without color too. */
-function TrendGrid({ report }) {
-  const rows = report.topics.filter((t) => t.total > 0);
-  const max = Math.max(1, ...rows.flatMap((t) => t.counts));
+const MONTH_NUMS = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
+
+/**
+ * One topics × months table, shaded by how often each was asked. A table, so it reads without
+ * color too. `columns` are the months to show; any not in `picked` are greyed out. `countOf`
+ * gives a topic's count for a month, and `max` is the darkest cell, shared across tables.
+ */
+function HeatTable({ caption, rows, columns, picked, countOf, max, label }) {
   const shade = (n) => (n ? Math.round(10 + (n / max) * 78) : 0);
-  // Months from more than one year carry their year, so "Mar" isn't ambiguous.
-  const manyYears = new Set(report.months.map((m) => m.slice(0, 4))).size > 1;
-  // Many months still fit the page: one letter per month, and each year named once, where it starts.
-  const compact = report.months.length > 18;
+  const sum = (list) => list.reduce((a, b) => a + b, 0);
   return (
-    <div className="adm-scroll">
-      <table className={`adm-heat ${compact ? 'is-compact' : ''}`}>
-        <caption className="sr-only">Questions per topic per month</caption>
-        <thead>
-          <tr>
-            <th scope="col">Topic</th>
-            {report.months.map((m, i) => (
-              <th key={m} scope="col" title={monthName(m)}>
-                {monthName(m, compact ? 'narrow' : 'short')}
-                {manyYears && (
-                  <span className="adm-heat-year">
-                    {!compact || i === 0 || m.endsWith('-01') ? m.slice(0, 4) : ' '}
-                  </span>
-                )}
-              </th>
-            ))}
-            <th scope="col">Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((t) => (
-            <tr key={t.topic}>
-              <th scope="row">{t.topic}</th>
-              {t.counts.map((n, i) => {
-                const p = shade(n);
-                const m = report.months[i];
+    <table className="adm-heat">
+      <caption className="sr-only">{caption}</caption>
+      <thead>
+        <tr>
+          <th scope="col">Topic</th>
+          {columns.map((m) => (
+            <th key={m} scope="col" title={monthName(m)} className={picked.has(m) ? '' : 'is-off'}>
+              {label(m)}
+            </th>
+          ))}
+          <th scope="col">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((t) => (
+          <tr key={t.topic}>
+            <th scope="row">{t.topic}</th>
+            {columns.map((m) => {
+              if (!picked.has(m)) {
                 return (
-                  <td
-                    key={m}
-                    className={p > 50 ? 'is-strong' : ''}
-                    style={{ '--heat': `${p}%` }}
-                    title={`${t.topic}, ${monthName(m)}: ${n} question${n === 1 ? '' : 's'}`}
-                  >
-                    {n || ''}
+                  <td key={m} className="is-off" title={`${monthName(m)} isn't in the report`}>
+                    ·
                   </td>
                 );
-              })}
-              <td className="adm-heat-total">{t.total}</td>
-            </tr>
-          ))}
-        </tbody>
-        <tfoot>
-          <tr>
-            <th scope="row">All questions</th>
-            {report.volume.map((v) => (
-              <td key={v.month}>{v.questions}</td>
-            ))}
-            <td className="adm-heat-total">{report.volume.reduce((sum, v) => sum + v.questions, 0)}</td>
+              }
+              const n = countOf(t, m);
+              const p = shade(n);
+              return (
+                <td
+                  key={m}
+                  className={p > 50 ? 'is-strong' : ''}
+                  style={{ '--heat': `${p}%` }}
+                  title={`${t.topic}, ${monthName(m)}: ${n} question${n === 1 ? '' : 's'}`}
+                >
+                  {n || ''}
+                </td>
+              );
+            })}
+            <td className="adm-heat-total">{sum(columns.filter((m) => picked.has(m)).map((m) => countOf(t, m)))}</td>
           </tr>
-        </tfoot>
-      </table>
+        ))}
+      </tbody>
+      <tfoot>
+        <tr>
+          <th scope="row">All questions</th>
+          {columns.map((m) => (
+            <td key={m} className={picked.has(m) ? '' : 'is-off'}>
+              {picked.has(m) ? sum(rows.map((t) => countOf(t, m))) : '·'}
+            </td>
+          ))}
+          <td className="adm-heat-total">
+            {sum(columns.filter((m) => picked.has(m)).flatMap((m) => rows.map((t) => countOf(t, m))))}
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+  );
+}
+
+/** Each year's total per topic, with totals at the side and along the bottom. */
+function YearTable({ rows, years, yearTotal }) {
+  const max = Math.max(1, ...rows.flatMap((t) => years.map(([y]) => yearTotal(t, y))));
+  const shade = (n) => (n ? Math.round(10 + (n / max) * 78) : 0);
+  const yearAll = (y) => rows.reduce((sum, t) => sum + yearTotal(t, y), 0);
+  return (
+    <table className="adm-heat adm-heat-summary">
+      <caption className="sr-only">Questions per topic per year</caption>
+      <thead>
+        <tr>
+          <th scope="col">Topic</th>
+          {years.map(([y]) => (
+            <th key={y} scope="col">
+              {y}
+            </th>
+          ))}
+          <th scope="col">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((t) => (
+          <tr key={t.topic}>
+            <th scope="row">{t.topic}</th>
+            {years.map(([y]) => {
+              const n = yearTotal(t, y);
+              const p = shade(n);
+              return (
+                <td
+                  key={y}
+                  className={p > 50 ? 'is-strong' : ''}
+                  style={{ '--heat': `${p}%` }}
+                  title={`${t.topic}, ${y}: ${n} question${n === 1 ? '' : 's'}`}
+                >
+                  {n}
+                </td>
+              );
+            })}
+            <td className="adm-heat-total">{years.reduce((sum, [y]) => sum + yearTotal(t, y), 0)}</td>
+          </tr>
+        ))}
+      </tbody>
+      <tfoot>
+        <tr>
+          <th scope="row">All questions</th>
+          {years.map(([y]) => (
+            <td key={y}>{yearAll(y)}</td>
+          ))}
+          <td className="adm-heat-total">{years.reduce((sum, [y]) => sum + yearAll(y), 0)}</td>
+        </tr>
+      </tfoot>
+    </table>
+  );
+}
+
+/**
+ * Topics over the months picked at the top. Within one year: a single table, a column per month.
+ * Across years: "All" shows a column per year; each year button shows that year's Jan–Dec, one
+ * table at a time, so the page stays short however many years are in the report.
+ */
+function TrendGrid({ report }) {
+  const rows = report.topics.filter((t) => t.total > 0);
+  const column = new Map(report.months.map((m, i) => [m, i]));
+  const countOf = (t, m) => (column.has(m) ? t.counts[column.get(m)] : 0);
+  const max = Math.max(1, ...rows.flatMap((t) => t.counts));
+
+  const byYear = new Map();
+  for (const m of report.months) {
+    const y = m.slice(0, 4);
+    if (!byYear.has(y)) byYear.set(y, []);
+    byYear.get(y).push(m);
+  }
+  const years = [...byYear];
+
+  // 'all' for the yearly table, or the year whose months are shown.
+  const [picked, setPicked] = useState('all');
+  const shown = byYear.has(picked) ? picked : 'all';
+
+  if (years.length === 1) {
+    return (
+      <div className="adm-scroll">
+        <HeatTable
+          caption="Questions per topic per month"
+          rows={rows}
+          columns={report.months}
+          picked={report.inPeriod}
+          countOf={countOf}
+          max={max}
+          label={(m) => monthName(m, 'short')}
+        />
+      </div>
+    );
+  }
+
+  const yearTotal = (t, y) => byYear.get(y).reduce((sum, m) => sum + countOf(t, m), 0);
+  const questionsIn = (y) => rows.reduce((sum, t) => sum + yearTotal(t, y), 0);
+  const months = shown === 'all' ? null : byYear.get(shown);
+  return (
+    <div>
+      <div className="adm-year-switch">
+        <h4 className="adm-heat-heading">Month by month</h4>
+        <div className="adm-chips" role="group" aria-label="Year to show">
+          <button type="button" aria-pressed={shown === 'all'} onClick={() => setPicked('all')}>
+            All
+          </button>
+          {[...years].reverse().map(([y]) => (
+            <button key={y} type="button" aria-pressed={y === shown} onClick={() => setPicked(y)}>
+              {y}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {shown === 'all' ? (
+        <>
+          <p className="adm-sub">
+            Each year’s total per topic, for the months picked at the top. Pick a year to see its months.
+          </p>
+          <div className="adm-scroll">
+            <YearTable rows={rows} years={years} yearTotal={yearTotal} />
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="adm-sub">
+            {shown}: {months.length === 12 ? 'all 12 months' : `${months.length} of 12 months picked`} ·{' '}
+            {questionsIn(shown)} questions. Months not picked show as “·”.
+          </p>
+          <div className="adm-scroll">
+            <HeatTable
+              caption={`Questions per topic per month, ${shown}`}
+              rows={rows}
+              columns={MONTH_NUMS.map((n) => `${shown}-${n}`)}
+              picked={report.inPeriod}
+              countOf={countOf}
+              max={max}
+              label={(m) => monthName(m, 'short')}
+            />
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -270,8 +432,12 @@ export default function AdminDashboard({ user, theme, onBack }) {
   );
 
   const [view, setView] = useState(viewFromHash);
+  const [section, setSection] = useState(sectionFromHash);
   useEffect(() => {
-    const onHash = () => setView(viewFromHash());
+    const onHash = () => {
+      setView(viewFromHash());
+      setSection(sectionFromHash());
+    };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
@@ -279,6 +445,12 @@ export default function AdminDashboard({ user, theme, onBack }) {
   function openView(key) {
     setView(key);
     window.history.replaceState(null, '', `#admin/${key}`);
+  }
+
+  function openSection(key) {
+    setSection(key);
+    // The report comes back on the tab it was left on.
+    window.history.replaceState(null, '', `#admin/${key === 'report' ? view : key}`);
   }
 
   // Arrow keys move between tabs, as in any tab strip.
@@ -363,14 +535,39 @@ export default function AdminDashboard({ user, theme, onBack }) {
         </div>
       </header>
 
+      <nav className="adm-sections" aria-label="Dashboard">
+        {SECTIONS.map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            aria-current={section === key ? 'page' : undefined}
+            onClick={() => openSection(key)}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+
       <div className="notice" role="status">
         <span className="label">Sample data</span>
-        <span>These figures are made up to show the dashboard. Real ones appear once the backend logs them.</span>
+        <span>
+          {section === 'report' &&
+            'These figures are made up to show the dashboard. Real ones appear once the backend logs them.'}
+          {section === 'accounts' &&
+            'These accounts are made up, and disabling is saved only in this browser until the backend supports it.'}
+          {section === 'knowledge' &&
+            'Changes here are saved only in this browser. The assistant uses them once the backend can index them.'}
+        </span>
       </div>
 
-      {!records && <p className="voice-hint">Loading the query log…</p>}
+      {section === 'accounts' &&
+        (records ? <AdminAccounts user={user} records={records} /> : <p className="voice-hint">Loading accounts…</p>)}
 
-      {records && (
+      {section === 'knowledge' && <AdminKnowledge user={user} />}
+
+      {section === 'report' && !records && <p className="voice-hint">Loading the query log…</p>}
+
+      {section === 'report' && records && (
         <>
           <section className="adm-cover">
             <div>
@@ -525,7 +722,7 @@ export default function AdminDashboard({ user, theme, onBack }) {
                   id="adm-view-trends"
                   aria-labelledby="adm-tab-trends"
                 >
-                  <h3>Inquiry trends by month</h3>
+                  <h3>Inquiry trends</h3>
                   <p className="adm-sub">
                     Questions per topic in each month picked at the top
                     {report.months.length > 1 ? ` (${report.months.length} months)` : ''}. Darker means asked more

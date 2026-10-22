@@ -562,30 +562,24 @@
       text-align: left;
     }
 
-    .adm-heat-year {
-      display: block;
-      font-size: 0.85em;
-      letter-spacing: 0.04em;
-      opacity: 0.75;
+    /* A month outside the report, shown only to keep Jan–Dec in place. */
+    th.is-off {
+      opacity: 0.45;
     }
 
-    /* Two or three years of months on one page: tighter headers and figures. */
-    &.is-compact {
-      thead th:not(:first-child):not(:last-child) {
-        padding: var(--space-1) 0;
-        letter-spacing: 0;
-      }
+    td.is-off {
+      background: none;
+      color: var(--muted);
+      opacity: 0.5;
+    }
 
-      .adm-heat-year {
-        overflow: visible;
-        font-size: 0.8em;
-        letter-spacing: 0;
-        text-align: left;
-      }
-
-      td {
-        font-size: var(--step--2);
-      }
+    .adm-heat-sub {
+      display: block;
+      font-size: 0.85em;
+      font-weight: 400;
+      letter-spacing: 0.02em;
+      text-transform: none;
+      opacity: 0.8;
     }
 
     /* Topic names stay in view while the months scroll on a phone. */
@@ -640,6 +634,29 @@
       font-weight: 600;
       color: var(--ink-soft);
     }
+  }
+
+  .adm-heat-heading {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: var(--step-1);
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .adm-heat-summary {
+    td {
+      height: 2.8rem;
+    }
+  }
+
+  .adm-year-switch {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2) var(--space-4);
+    margin-bottom: var(--space-1);
   }
 
   /* ---------- tracker ---------- */
@@ -942,6 +959,387 @@
     font-style: italic;
     color: var(--ink);
     white-space: pre-wrap;
+  }
+
+  /* ---------- dashboard parts: report · accounts · knowledge base ---------- */
+
+  .adm-sections {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
+
+    button {
+      padding: var(--space-2) var(--space-4);
+      border: 1px solid var(--rule);
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--ink-soft);
+      font: inherit;
+      font-size: var(--step--1);
+      font-weight: 600;
+      cursor: pointer;
+      transition: border-color 200ms var(--ease-out), color 200ms var(--ease-out);
+    }
+
+    button:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    button[aria-current='page'] {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: var(--accent-ink);
+    }
+
+    button:focus-visible {
+      outline: 2px solid var(--focus);
+      outline-offset: 2px;
+    }
+  }
+
+  /* A whole page (accounts, knowledge base): its title needs no top rule. */
+  .adm-page .adm-tracker-head h3 {
+    padding-top: 0;
+    border-top: none;
+  }
+
+  @media (min-width: 561px) {
+    .adm-ledger.adm-ledger-short {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+
+      > div {
+        border-top: none;
+        border-right: 1px solid var(--rule);
+        padding-left: var(--space-4);
+      }
+
+      > div:first-child {
+        padding-left: 0;
+      }
+
+      > div:last-child {
+        border-right: none;
+      }
+    }
+  }
+
+  /* A note that asks for something: disable the unused, or confirm a removal. */
+  .adm-callout {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2) var(--space-4);
+    margin-bottom: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--citation);
+    border-radius: var(--radius);
+    background: var(--surface);
+
+    p {
+      margin: 0;
+      font-size: var(--step--1);
+      color: var(--ink);
+    }
+
+    &.is-confirm {
+      border-left-color: var(--danger-text);
+      background: var(--danger-bg);
+    }
+
+    &.is-danger {
+      border-left-color: var(--danger-text);
+    }
+  }
+
+  .adm-callout-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  .adm-danger-button {
+    padding: var(--space-2) var(--space-4);
+    border: 1px solid var(--danger-text);
+    border-radius: 999px;
+    background: var(--danger-text);
+    color: var(--surface);
+    font: inherit;
+    font-size: var(--step--1);
+    font-weight: 600;
+    cursor: pointer;
+
+    &:focus-visible {
+      outline: 2px solid var(--focus);
+      outline-offset: 2px;
+    }
+  }
+
+  .link-button.adm-danger-link {
+    color: var(--danger-text);
+  }
+
+  /* ---------- accounts ---------- */
+
+  .adm-check-col {
+    width: 2rem;
+
+    input {
+      accent-color: var(--accent);
+    }
+  }
+
+  .adm-account-name {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .adm-tag {
+    padding: 0 var(--space-2);
+    border-radius: 999px;
+    background: var(--surface-sunk);
+    font-size: var(--step--2);
+    font-weight: 600;
+    color: var(--ink-soft);
+  }
+
+  .adm-log tr.is-disabled .adm-account-name {
+    color: var(--muted);
+    text-decoration: line-through;
+    text-decoration-color: var(--rule-strong);
+  }
+
+  .adm-row-action {
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .adm-row-buttons {
+    justify-content: flex-end;
+  }
+
+  /* ---------- knowledge base ---------- */
+
+  .adm-kb-part {
+    margin-bottom: var(--space-6);
+  }
+
+  .adm-kb-filters {
+    margin-bottom: var(--space-3);
+  }
+
+  .adm-kb-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+
+    li {
+      padding: var(--space-3) 0;
+      border-bottom: 1px solid var(--rule);
+    }
+
+    li.is-open {
+      padding-left: var(--space-3);
+      border-left: 2px solid var(--foil);
+      background: var(--surface);
+    }
+  }
+
+  .adm-kb-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
+
+  .adm-kb-content {
+    margin: var(--space-3) 0;
+    max-width: 70ch;
+    color: var(--ink);
+    white-space: pre-wrap;
+  }
+
+  .adm-kb-note {
+    margin: 0 0 var(--space-3);
+    font-size: var(--step--1);
+    color: var(--ink-soft);
+  }
+
+  /* ---------- knowledge base pictures ---------- */
+
+  .adm-pic-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: var(--space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+
+    /* An opened picture spans the whole row. */
+    li.is-open {
+      grid-column: 1 / -1;
+    }
+  }
+
+  .adm-pic-card {
+    display: grid;
+    gap: var(--space-1);
+    width: 100%;
+    padding: var(--space-2);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 200ms var(--ease-out);
+
+    img {
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      object-fit: cover;
+      border-radius: var(--radius);
+      background: var(--surface-sunk);
+    }
+
+    .adm-pill {
+      justify-self: start;
+    }
+
+    &:hover {
+      border-color: var(--accent);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--focus);
+      outline-offset: 2px;
+    }
+  }
+
+  .adm-pic-title {
+    font-weight: 600;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+  }
+
+  .adm-pic-detail {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    gap: var(--space-4);
+    padding: var(--space-3);
+    border: 1px solid var(--rule);
+    border-left: 2px solid var(--foil);
+    border-radius: var(--radius);
+    background: var(--surface);
+
+    img {
+      width: 100%;
+      border-radius: var(--radius);
+    }
+
+    .adm-account-name {
+      margin: 0;
+    }
+  }
+
+  .adm-pic-form {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    align-items: start;
+  }
+
+  .adm-pic-preview {
+    display: grid;
+    gap: var(--space-2);
+    justify-items: start;
+
+    img {
+      width: 100%;
+      border: 1px solid var(--rule);
+      border-radius: var(--radius);
+    }
+  }
+
+  .adm-pic-fields {
+    display: grid;
+    gap: var(--space-3);
+  }
+
+  .adm-field-hint {
+    font-size: var(--step--2);
+    color: var(--muted);
+  }
+
+  @media (max-width: 640px) {
+    .adm-pic-detail,
+    .adm-pic-form {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  .adm-form {
+    display: grid;
+    gap: var(--space-3);
+    margin: var(--space-3) 0 var(--space-4);
+    padding: var(--space-4);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    background: var(--surface);
+
+    label {
+      display: grid;
+      gap: var(--space-1);
+    }
+
+    .label {
+      margin: 0;
+    }
+
+    :is(input, select, textarea) {
+      min-height: 38px;
+      padding: var(--space-2) var(--space-3);
+      border: 1px solid var(--rule);
+      border-radius: var(--radius);
+      background: var(--bg);
+      color: var(--ink);
+      font: inherit;
+      font-size: var(--step--1);
+    }
+
+    textarea {
+      resize: vertical;
+      line-height: 1.5;
+    }
+
+    :is(input, select, textarea):focus-visible {
+      outline: 2px solid var(--focus);
+      outline-offset: 2px;
+    }
+  }
+
+  .adm-form-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+  }
+
+  @media (max-width: 560px) {
+    .adm-form-row {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .adm-row-action {
+      text-align: left;
+    }
   }
 
   /* ---------- narrow screens ---------- */
