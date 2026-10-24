@@ -123,7 +123,8 @@ export default function ChatBot({ auth, theme, onOpenAdmin }) {
     try {
       const res = await fetch(`${API_URL}/api/chat/stream`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        // Signed in, so the admin's inquiry report knows who asked.
+        headers: { 'Content-Type': 'application/json', ...(token && { Authorization: `Bearer ${token}` }) },
         body: JSON.stringify({ message: question, session_id: sessionId }),
       });
       if (!res.ok) {
@@ -158,6 +159,7 @@ export default function ChatBot({ auth, theme, onOpenAdmin }) {
               confidence: event.confidence,
               citations: event.citations ?? [],
               canReroute: Boolean(event.can_reroute),
+              inquiryId: event.inquiry_id ?? null,
             });
             endStream(text);
           } else if (event.type === 'error') {
@@ -347,6 +349,7 @@ export default function ChatBot({ auth, theme, onOpenAdmin }) {
                     {askingFor === idx && (
                       <AskOffice
                         question={m.question}
+                        inquiryId={m.inquiryId}
                         token={token}
                         onCancel={() => setAskingFor(null)}
                         onSent={(ticket) => {

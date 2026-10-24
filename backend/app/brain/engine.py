@@ -16,6 +16,7 @@ import time
 from collections import OrderedDict, deque
 from collections.abc import Iterator
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 
 from llama_index.core import VectorStoreIndex
@@ -25,9 +26,10 @@ from app.brain import vectors
 from app.brain.bm25 import BM25Index
 from app.brain.intents import QUESTION, detect_intent
 from app.brain.llm import ModelUnavailableError, check_models, get_embed_model, get_llm, reply_model_name
-from app.brain.memory import Memory
+from app.brain.memory import Memory, get_memory
 from app.brain.prompts import build_messages
 from app.brain.retriever import HybridRetriever
+from app.brain.topics import topic_of
 from app.brain.text import split_sentences
 from app.config import get_settings
 from app.sources import parse_label
@@ -49,6 +51,7 @@ class Reply:
     intent: str = QUESTION
     trace: list[str] = field(default_factory=list)
     can_reroute: bool = False
+    inquiry_id: int | None = None
     citations: list[dict] = field(default_factory=list)
 
 
@@ -106,7 +109,7 @@ def load() -> Brain:
                 vector_index = vectors.load(keywords.chunks, fingerprint)
             except vectors.VectorsNotReadyError as exc:
                 raise BrainNotReadyError(str(exc)) from exc
-            _brain = Brain(keywords, vector_index, Memory(get_settings().memory_db), fingerprint)
+            _brain = Brain(keywords, vector_index, get_memory(), fingerprint)
         return _brain
 
 
@@ -198,11 +201,19 @@ def _citations(nodes: list, key_sentences: str, limit: int = 3) -> list[dict]:
     return citations[:limit]
 
 
-def stream_answer(message: str, session_id: str = "default") -> Iterator[dict]:
-    """Yields {"type": "delta", "text"} events as the reply is written, then one "done" event."""
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def stream_answer(message: str, session_id: str = "default", user_id: int | None = None) -> Iterator[dict]:
+    """Yields {"type": "delta", "text"} events as the reply is written, then one "done" event.
+
+    `user_id` is the signed-in student, if any; it goes into the inquiry log for the admin report.
+    """
     brain = load()
     check_models()
     started = time.perf_counter()
+    asked_at = _now()
     settings = get_settings()
 
     brain.memory.log_turn(session_id, "student", message)
@@ -255,22 +266,40 @@ def stream_answer(message: str, session_id: str = "default") -> Iterator[dict]:
 
     trace.append(f"Written by {reply_model_name()} in {time.perf_counter() - started:.1f} s.")
 
+    can_reroute = intent == QUESTION and (not nodes or said_not_found)
+    confidence = round(confidence if sources else 0.0, 2)
+    # Small talk isn't an inquiry; every handbook question is, answered or not.
+    inquiry_id = None
+    if intent == QUESTION:
+        inquiry_id = brain.memory.log_inquiry(
+            session_id,
+            user_id,
+            message,
+            topic_of(message),
+            answered=not can_reroute,
+            source=sources[0] if sources else None,
+            confidence=confidence,
+            asked_at=asked_at,
+            replied_at=_now(),
+        )
+
     yield {
         "type": "done",
         "reply": text,
         "sources": sources,
         "citations": citations,
-        "confidence": round(confidence if sources else 0.0, 2),
+        "confidence": confidence,
         "intent": intent,
         "trace": trace,
         # Offer "Ask an office" whenever the handbook didn't answer it.
-        "can_reroute": intent == QUESTION and (not nodes or said_not_found),
+        "can_reroute": can_reroute,
+        "inquiry_id": inquiry_id,
     }
 
 
-def answer(message: str, session_id: str = "default") -> Reply:
+def answer(message: str, session_id: str = "default", user_id: int | None = None) -> Reply:
     """The whole reply at once, for callers that don't stream."""
-    for event in stream_answer(message, session_id):
+    for event in stream_answer(message, session_id, user_id):
         if event["type"] == "done":
             return Reply(
                 reply=event["reply"],
@@ -280,6 +309,7 @@ def answer(message: str, session_id: str = "default") -> Reply:
                 trace=event["trace"],
                 can_reroute=event["can_reroute"],
                 citations=event["citations"],
+                inquiry_id=event["inquiry_id"],
             )
     raise ModelUnavailableError("The AI model stopped before finishing its reply.")
 

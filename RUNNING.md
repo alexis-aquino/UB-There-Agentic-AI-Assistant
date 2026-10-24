@@ -142,6 +142,26 @@ it, **Admin / Guest login** (`#/guest`) is the email-and-password door, with gue
   Google only allows plain-http sign-in from `localhost`, so the Google button works on the PC
   but not on a phone opening `http://192.168.x.x:5273` — guests' email sign-in works there.
 
+## Admin dashboard
+
+Administrators see **Admin dashboard** in the menu (`#admin`). Who counts is set in `backend\.env`,
+then restart the backend:
+
+```
+ADMIN_EMAILS=registrar.head@ub.edu.ph,osa.director@ub.edu.ph
+```
+
+Only addresses in `GOOGLE_DOMAIN` (ub.edu.ph) count, so admins sign in with **Sign in with UB
+Mail**; a guest account is never an admin, even if listed. The backend refuses the dashboard's data
+to everyone else. `admin@ub.edu.ph` is a password test account; remove it from the list once real
+admins sign in with Google.
+
+The **Inquiry report** is built from every handbook question asked (small talk like "hi" isn't
+counted): its topic, whether the handbook answered it, the source page, who asked (when signed in),
+and, if it was sent to an office, the ticket and the office's answer. Flags for offensive or
+off-topic questions are saved in the backend. All of it lives in `backend\brain_memory.db` (questions)
+and `backend\tickets.db` (office tickets). Questions asked before this was added aren't in it.
+
 ## Asking an office
 
 When the assistant can't answer, or isn't sure, its reply shows **Ask an office**. The student

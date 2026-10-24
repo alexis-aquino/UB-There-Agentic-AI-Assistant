@@ -31,8 +31,14 @@ def _in_domain(email: str) -> bool:
     return bool(domain) and email.lower().endswith(f"@{domain.lower()}")
 
 
+def is_admin(user: User) -> bool:
+    # A UB address on the admin list. Guest accounts can't be admins even if listed, and with
+    # Google sign-in on, UB addresses can only be made through Google.
+    return _in_domain(user.email) and user.email.lower() in get_settings().admins
+
+
 def _user_out(user: User) -> UserOut:
-    return UserOut(**asdict(user), guest=not _in_domain(user.email))
+    return UserOut(**asdict(user), guest=not _in_domain(user.email), admin=is_admin(user))
 
 
 def _session(user: User, created: bool = False) -> AuthResponse:
@@ -46,6 +52,20 @@ def current_user(authorization: str = Header(default="")) -> User:
     user = get_store().get(user_id) if user_id is not None else None
     if user is None:
         raise HTTPException(status_code=401, detail="Please sign in again.")
+    return user
+
+
+def optional_user(authorization: str = Header(default="")) -> User | None:
+    """The signed-in user, or None: for routes that also work without signing in."""
+    try:
+        return current_user(authorization)
+    except HTTPException:
+        return None
+
+
+def admin_user(user: User = Depends(current_user)) -> User:
+    if not is_admin(user):
+        raise HTTPException(status_code=403, detail="Only administrators can see this.")
     return user
 
 

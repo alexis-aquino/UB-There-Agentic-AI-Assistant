@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { apiFetch } from '../api.js';
 
 /** Pass a question the assistant couldn't answer to a university office. */
-export default function AskOffice({ question, token, onSent, onCancel }) {
+export default function AskOffice({ question, inquiryId, token, onSent, onCancel }) {
   const [offices, setOffices] = useState([]);
   const [officeId, setOfficeId] = useState('');
   const [text, setText] = useState(question);
@@ -25,7 +25,7 @@ export default function AskOffice({ question, token, onSent, onCancel }) {
     try {
       const ticket = await apiFetch('/api/tickets', {
         token,
-        body: { question: text.trim(), office_id: officeId },
+        body: { question: text.trim(), office_id: officeId, inquiry_id: inquiryId ?? null },
       });
       onSent(ticket);
     } catch (err) {

@@ -69,5 +69,6 @@ cloned voice; weights are **non-commercial**), or `off`.
 ## Not built yet
 
 Accounts exist (email/password and Google, see [RUNNING.md](RUNNING.md)), but only the frontend
-requires sign-in — the chat API itself is still open. No administrator or department dashboards, and
-no document-audit (DFD process 4.0).
+requires sign-in — the chat API itself is still open. The admin dashboard's **Inquiry report** runs on
+the real query log; its Accounts and Knowledge base pages are still sample data. No department
+dashboards, and no document-audit (DFD process 4.0).

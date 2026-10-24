@@ -16,6 +16,8 @@ class ChatResponse(BaseModel):
     can_reroute: bool = False
     # Where the answer came from: label, file, page, the passage, and whether a page picture exists.
     citations: list[dict] = []
+    # The question's row in the inquiry log, so "Ask an office" can link its ticket to it.
+    inquiry_id: int | None = None
 
 
 class SpeakRequest(BaseModel):
@@ -70,6 +72,8 @@ class UserOut(BaseModel):
     default_password: bool = False
     # True for accounts outside the university domain (signed up with email).
     guest: bool = True
+    # Can open the admin dashboard (ADMIN_EMAILS in backend/.env).
+    admin: bool = False
 
 
 class AuthResponse(BaseModel):
@@ -95,6 +99,8 @@ class OfficeList(BaseModel):
 class TicketCreate(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
     office_id: str = Field(min_length=1, max_length=40)
+    # The chat question this came from (ChatResponse.inquiry_id), for the admin's inquiry report.
+    inquiry_id: int | None = None
 
     @field_validator("question", mode="before")
     @classmethod
@@ -116,3 +122,10 @@ class TicketOut(BaseModel):
     answered_by: str | None = None
     created_at: str | None = None
     answered_at: str | None = None
+
+
+# ---------- admin ----------
+
+
+class FlagRequest(BaseModel):
+    flagged: bool

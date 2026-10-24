@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS tickets (
     answered_by TEXT,
     token_hash TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    answered_at TEXT
+    answered_at TEXT,
+    inquiry_id INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_tickets_user ON tickets(user_id);
 """
@@ -49,6 +50,7 @@ class Ticket:
     answered_by: str | None
     created_at: str | None
     answered_at: str | None
+    inquiry_id: int | None = None  # the chat question it came from, in the query log
 
     @property
     def ref(self) -> str:
@@ -67,6 +69,7 @@ class Ticket:
             answered_by=row["answered_by"],
             created_at=_iso(row["created_at"]),
             answered_at=_iso(row["answered_at"]),
+            inquiry_id=row["inquiry_id"],
         )
 
 
@@ -86,16 +89,22 @@ class TicketStore:
         self._connection = sqlite3.connect(str(db_path), check_same_thread=False)
         self._connection.row_factory = sqlite3.Row
         self._connection.executescript(SCHEMA)
+        # Ticket files made before tickets were linked to chat questions.
+        columns = {row["name"] for row in self._connection.execute("PRAGMA table_info(tickets)")}
+        if "inquiry_id" not in columns:
+            self._connection.execute("ALTER TABLE tickets ADD COLUMN inquiry_id INTEGER")
         self._connection.commit()
 
-    def create(self, user_id: int, office_id: str, office_name: str, question: str) -> tuple[Ticket, str]:
+    def create(
+        self, user_id: int, office_id: str, office_name: str, question: str, inquiry_id: int | None = None
+    ) -> tuple[Ticket, str]:
         """Returns the ticket and its answer-link token. Only the token's hash is stored."""
         token = secrets.token_urlsafe(24)
         with self._lock:
             cursor = self._connection.execute(
-                "INSERT INTO tickets (user_id, office_id, office_name, question, token_hash)"
-                " VALUES (?, ?, ?, ?, ?)",
-                (user_id, office_id, office_name, question, _hash(token)),
+                "INSERT INTO tickets (user_id, office_id, office_name, question, token_hash, inquiry_id)"
+                " VALUES (?, ?, ?, ?, ?, ?)",
+                (user_id, office_id, office_name, question, _hash(token), inquiry_id),
             )
             self._connection.commit()
         return self.get(cursor.lastrowid), token
@@ -122,6 +131,14 @@ class TicketStore:
                 "SELECT * FROM tickets WHERE user_id = ? ORDER BY id DESC", (user_id,)
             ).fetchall()
         return [Ticket.from_row(row) for row in rows]
+
+    def by_inquiry(self) -> dict[int, Ticket]:
+        """The latest ticket for each chat question that was sent to an office."""
+        with self._lock:
+            rows = self._connection.execute(
+                "SELECT * FROM tickets WHERE inquiry_id IS NOT NULL ORDER BY id"
+            ).fetchall()
+        return {row["inquiry_id"]: Ticket.from_row(row) for row in rows}
 
     def count_since(self, user_id: int, hours: int) -> int:
         with self._lock:

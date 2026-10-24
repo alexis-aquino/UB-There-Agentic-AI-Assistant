@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { STATES, buildReport, filterRecords, monthOf, stateOf } from '../admin/report.js';
-import { TOPICS, loadQueryLog } from '../admin/sampleData.js';
+import { flagInquiry as saveFlag, loadQueryLog } from '../admin/queryLog.js';
 import { monthName, periodName, readYears, yearMonths } from '../admin/months.js';
 import AdminAccounts from './AdminAccounts.jsx';
 import AdminKnowledge from './AdminKnowledge.jsx';
@@ -31,25 +31,6 @@ const viewFromHash = () => {
   const hash = window.location.hash.split('/')[1];
   return VIEWS.some(([key]) => key === hash) ? hash : 'questions';
 };
-const FLAG_STORE = 'ubt-admin-flags';
-
-// Staff flags live in this browser until the backend stores them.
-function loadFlags() {
-  try {
-    return JSON.parse(localStorage.getItem(FLAG_STORE)) ?? {};
-  } catch {
-    return {};
-  }
-}
-
-function saveFlags(flags) {
-  try {
-    localStorage.setItem(FLAG_STORE, JSON.stringify(flags));
-  } catch {
-    // Private windows can refuse storage; the flag still holds for this visit.
-  }
-}
-
 function when(iso) {
   if (!iso) return '';
   return new Date(iso).toLocaleString(undefined, {
@@ -408,9 +389,11 @@ function TrendGrid({ report }) {
 }
 
 /** The administrator's view of the query log: monthly trends and where every inquiry stands. */
-export default function AdminDashboard({ user, theme, onBack }) {
-  const [log, setLog] = useState(null);
-  const [flags, setFlags] = useState(loadFlags); // id -> flag, or null where staff cleared one
+export default function AdminDashboard({ user, token, theme, onBack }) {
+  const [records, setRecords] = useState(null); // the query log, newest first
+  const [topics, setTopics] = useState([]);
+  const [loadError, setLoadError] = useState(null);
+  const [flagError, setFlagError] = useState(null);
   const [months, setMonths] = useState(() => [monthOf(new Date())]); // 'all' or a list of "YYYY-MM"
   // What's typed in the Months dropdown's year box ("2026" or "2024-2026"), kept across tabs.
   const [yearText, setYearText] = useState(() => monthOf(new Date()).slice(0, 4));
@@ -422,14 +405,13 @@ export default function AdminDashboard({ user, theme, onBack }) {
   const [open, setOpen] = useState(null);
 
   useEffect(() => {
-    loadQueryLog().then(setLog);
-  }, []);
-
-  // The log with staff's flags laid over the assistant's.
-  const records = useMemo(
-    () => log?.map((r) => (r.id in flags ? { ...r, flag: flags[r.id] } : r)) ?? null,
-    [log, flags],
-  );
+    loadQueryLog(token)
+      .then((data) => {
+        setRecords(data.inquiries);
+        setTopics(data.topics);
+      })
+      .catch((err) => setLoadError(err.message));
+  }, [token]);
 
   const [view, setView] = useState(viewFromHash);
   const [section, setSection] = useState(sectionFromHash);
@@ -465,12 +447,10 @@ export default function AdminDashboard({ user, theme, onBack }) {
   }
 
   function flagInquiry(id, flagged) {
-    const next = {
-      ...flags,
-      [id]: flagged ? { by: user.name, at: new Date().toISOString() } : null,
-    };
-    setFlags(next);
-    saveFlags(next);
+    setFlagError(null);
+    saveFlag(token, id, flagged)
+      .then((updated) => setRecords((prev) => prev.map((r) => (r.id === id ? updated : r))))
+      .catch((err) => setFlagError(err.message));
   }
 
   // Months that have questions, newest first, for the picker.
@@ -548,24 +528,27 @@ export default function AdminDashboard({ user, theme, onBack }) {
         ))}
       </nav>
 
-      <div className="notice" role="status">
-        <span className="label">Sample data</span>
-        <span>
-          {section === 'report' &&
-            'These figures are made up to show the dashboard. Real ones appear once the backend logs them.'}
-          {section === 'accounts' &&
-            'These accounts are made up, and disabling is saved only in this browser until the backend supports it.'}
-          {section === 'knowledge' &&
-            'Changes here are saved only in this browser. The assistant uses them once the backend can index them.'}
-        </span>
-      </div>
+      {section !== 'report' && (
+        <div className="notice" role="status">
+          <span className="label">Sample data</span>
+          <span>
+            {section === 'accounts' &&
+              'Built from the students who asked questions, plus made-up accounts. Sign-in type and join dates are made up too, and disabling is saved only in this browser until the backend supports it.'}
+            {section === 'knowledge' &&
+              'Changes here are saved only in this browser. The assistant uses them once the backend can index them.'}
+          </span>
+        </div>
+      )}
 
       {section === 'accounts' &&
         (records ? <AdminAccounts user={user} records={records} /> : <p className="voice-hint">Loading accounts…</p>)}
 
       {section === 'knowledge' && <AdminKnowledge user={user} />}
 
-      {section === 'report' && !records && <p className="voice-hint">Loading the query log…</p>}
+      {section === 'report' && !records && (
+        <p className="voice-hint">{loadError ? `Couldn't load the query log: ${loadError}` : 'Loading the query log…'}</p>
+      )}
+      {section === 'report' && flagError && <p className="voice-hint">Couldn't save the flag: {flagError}</p>}
 
       {section === 'report' && records && (
         <>
@@ -781,7 +764,7 @@ export default function AdminDashboard({ user, theme, onBack }) {
                       />
                       <select value={topic} onChange={(e) => setTopic(e.target.value)} aria-label="Topic">
                         <option value="">All topics</option>
-                        {TOPICS.map((name) => (
+                        {topics.map((name) => (
                           <option key={name} value={name}>
                             {name}
                           </option>

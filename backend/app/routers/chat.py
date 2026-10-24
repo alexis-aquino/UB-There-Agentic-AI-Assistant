@@ -2,12 +2,14 @@ import json
 import logging
 from collections.abc import Iterator
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
 from app.brain import engine
 from app.brain.engine import BrainNotReadyError, ModelUnavailableError
+from app.auth.store import User
 from app.brain.llm import check_models
+from app.routers.auth import optional_user
 from app.schemas import ChatQuery, ChatResponse
 
 logger = logging.getLogger(__name__)
@@ -25,10 +27,10 @@ def _ready() -> None:
 
 
 @router.post("/chat", response_model=ChatResponse)
-def chat(query: ChatQuery) -> ChatResponse:
+def chat(query: ChatQuery, user: User | None = Depends(optional_user)) -> ChatResponse:
     _ready()
     try:
-        result = engine.answer(query.message, query.session_id)
+        result = engine.answer(query.message, query.session_id, user.id if user else None)
     except ModelUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
@@ -43,17 +45,18 @@ def chat(query: ChatQuery) -> ChatResponse:
         trace=result.trace,
         can_reroute=result.can_reroute,
         citations=result.citations,
+        inquiry_id=result.inquiry_id,
     )
 
 
 @router.post("/chat/stream")
-def chat_stream(query: ChatQuery) -> StreamingResponse:
+def chat_stream(query: ChatQuery, user: User | None = Depends(optional_user)) -> StreamingResponse:
     """The reply as newline-delimited JSON: {"type":"delta","text":...} events, then "done"."""
     _ready()
 
     def events() -> Iterator[str]:
         try:
-            for event in engine.stream_answer(query.message, query.session_id):
+            for event in engine.stream_answer(query.message, query.session_id, user.id if user else None):
                 yield json.dumps(event) + "\n"
         except ModelUnavailableError as exc:
             yield json.dumps({"type": "error", "detail": str(exc)}) + "\n"

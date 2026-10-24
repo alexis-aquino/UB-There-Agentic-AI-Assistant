@@ -7,6 +7,7 @@ from fastapi.responses import HTMLResponse
 
 from app import mail
 from app.auth.store import User
+from app.brain.memory import get_memory
 from app.config import get_settings
 from app.routers.auth import current_user, get_store
 from app.schemas import OfficeList, TicketCreate, TicketOut
@@ -108,7 +109,11 @@ def create_ticket(body: TicketCreate, user: User = Depends(current_user)) -> Tic
             "Please try again tomorrow.",
         )
 
-    ticket, token = store.create(user.id, office.id, office.name, body.question)
+    # Linked only to the student's own question, so nobody can attach a ticket to someone else's.
+    inquiry = get_memory().inquiry(body.inquiry_id) if body.inquiry_id else None
+    inquiry_id = inquiry["id"] if inquiry and inquiry["user_id"] == user.id else None
+
+    ticket, token = store.create(user.id, office.id, office.name, body.question, inquiry_id)
     link = f"{settings.public_base_url.rstrip('/')}/answer/{ticket.ref}?t={token}"
     try:
         mail.send(office.email, *_office_email(ticket, user, link))

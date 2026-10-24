@@ -66,6 +66,9 @@ class Settings(BaseSettings):
     # Google sign-in is only for this Workspace domain; everyone else signs up as a guest.
     google_domain: str = "ub.edu.ph"
     session_days: int = 7
+    # Who can open the admin dashboard, comma-separated. Only addresses in google_domain count,
+    # so with Google sign-in on, an admin is always a verified UB account.
+    admin_emails: str = ""
 
     # --- asking an office (rerouted questions) ---
     offices_path: Path = BACKEND_ROOT / "offices.json"
@@ -89,6 +92,10 @@ class Settings(BaseSettings):
     @property
     def studio_hosts(self) -> set[str]:
         return {host.strip() for host in self.voice_studio_hosts.split(",") if host.strip()}
+
+    @property
+    def admins(self) -> set[str]:
+        return {email.strip().lower() for email in self.admin_emails.split(",") if email.strip()}
 
     @property
     def allowed_origins(self) -> list[str]:

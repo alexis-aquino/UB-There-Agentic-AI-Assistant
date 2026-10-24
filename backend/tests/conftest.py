@@ -17,6 +17,8 @@ os.environ["MAIL_OUTBOX_DIR"] = str(_TMP / "outbox")  # MAIL_MODE defaults to lo
 os.environ["SOURCE_CACHE_DIR"] = str(_TMP / "source_cache")
 os.environ["USERS_DB"] = str(_TMP / "users.db")  # never touch real accounts
 os.environ["GOOGLE_CLIENT_ID"] = "test-client.apps.googleusercontent.com"
+# A UB admin, and a guest address that is listed but must not become an admin.
+os.environ["ADMIN_EMAILS"] = "Boss@ub.edu.ph, outsider@example.com"
 os.environ["LLM_PROVIDER"] = "mock"  # offline stand-in model: the tests never need Ollama
 os.environ["VOICE_PROVIDER"] = "off"  # keep tests fast and independent of Piper
 os.environ["VOICE_CACHE_DIR"] = str(_TMP / "voice_cache")

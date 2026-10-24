@@ -8,13 +8,6 @@ import useTheme from './hooks/useTheme.js';
 // The admin dashboard lives at #admin, so it can be bookmarked and the Back button works.
 const onAdminPage = () => window.location.hash.split('/')[0] === '#admin'; // #admin, or #admin/<tab>
 
-// Who sees "Admin dashboard" in the menu (frontend/.env). Only hides the link: with no backend
-// admin role yet, anyone signed in can still open #admin — it shows sample data only.
-const ADMIN_EMAILS = (import.meta.env.VITE_ADMIN_EMAILS ?? '')
-  .split(',')
-  .map((email) => email.trim().toLowerCase())
-  .filter(Boolean);
-
 export default function App() {
   const auth = useAuth();
   const theme = useTheme();
@@ -28,12 +21,17 @@ export default function App() {
 
   if (auth.status === 'loading') return <div className="auth-loading">Loading…</div>;
   if (auth.status !== 'signed-in') return <AuthPage auth={auth} theme={theme} />;
-  const isAdmin = ADMIN_EMAILS.includes(auth.user.email.toLowerCase());
+  // The backend decides who is an admin (ADMIN_EMAILS in backend/.env, UB accounts only) and
+  // refuses the dashboard's data to everyone else; this only decides what to show.
+  const isAdmin = Boolean(auth.user.admin);
+  const showAdmin = admin && isAdmin;
   return (
     <>
-      {admin && <AdminDashboard user={auth.user} theme={theme} onBack={() => (window.location.hash = '')} />}
+      {showAdmin && (
+        <AdminDashboard user={auth.user} token={auth.token} theme={theme} onBack={() => (window.location.hash = '')} />
+      )}
       {/* Stays mounted under the dashboard, so the conversation survives a visit to it. */}
-      <div hidden={admin}>
+      <div hidden={showAdmin}>
         <ChatBot auth={auth} theme={theme} onOpenAdmin={isAdmin ? () => (window.location.hash = 'admin') : null} />
       </div>
     </>
