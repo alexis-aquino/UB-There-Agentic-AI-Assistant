@@ -74,6 +74,19 @@ and replies to the notification email are not read — please answer here.</p>""
     )
 
 
+def closed_page(ticket: Ticket) -> str:
+    """The student's account was deleted, so an answer would reach nobody."""
+    return _page(
+        ticket.ref,
+        f"""<p class="bad">This question is closed: the student's account has been deleted, so an answer
+could no longer reach them.</p>
+<h1>Question for the {escape(ticket.office_name)}</h1>
+<p class="meta">{escape(ticket.ref)}</p>
+<blockquote>{escape(ticket.question)}</blockquote>
+<p class="note">No answer is needed. You can close this page.</p>""",
+    )
+
+
 def not_found_page() -> str:
     return _page(
         "Link not valid",

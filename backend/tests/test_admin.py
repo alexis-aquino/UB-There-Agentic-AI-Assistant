@@ -6,6 +6,7 @@ from app.brain.memory import get_memory
 from app.brain.topics import topic_of
 from app.main import app
 from app.routers import auth
+from tests.test_tickets import answer_link_from, outbox
 
 client = TestClient(app)
 
@@ -156,9 +157,23 @@ def test_admins_cannot_disable_themselves():
     assert accounts()["boss@ub.edu.ph"]["disabled"] is None
 
 
-def test_delete_waits_until_disabled_long_enough_and_keeps_who_asked():
-    _, user = account(unique("gone", "ub.edu.ph"))
-    inquiry = log(user_id=user.id)
+def test_delete_waits_until_disabled_long_enough_and_keeps_the_history():
+    headers, user = account(unique("gone", "ub.edu.ph"))
+    answered = log(user_id=user.id)
+    rerouted = log("Can I bring my dog to class?", user_id=user.id, answered=False)
+    pending = log("Can I get my grades early?", user_id=user.id, answered=False)
+    resolved = log("Can I shift courses mid-year?", user_id=user.id, answered=False)
+    tickets = {}
+    for inquiry in (pending, resolved):
+        tickets[inquiry] = client.post(
+            "/api/tickets",
+            json={"question": "Office question", "office_id": "registrar", "inquiry_id": inquiry},
+            headers=headers,
+        ).json()["ref"]
+        tickets[inquiry, "link"] = answer_link_from(outbox()[-1])
+    ref, token = tickets[resolved, "link"]
+    client.post(f"/answer/{ref}", data={"t": token, "answer": "Yes, file the form before week 3."})
+    inquiry = answered
     client.post("/api/admin/accounts/disable", json={"ids": [user.id]}, headers=ADMIN)
     early = client.post("/api/admin/accounts/delete", json={"ids": [user.id]}, headers=ADMIN)
     assert early.status_code == 400 and user.email in accounts()
@@ -174,3 +189,18 @@ def test_delete_waits_until_disabled_long_enough_and_keeps_who_asked():
     assert user.email not in accounts()
     record = next(r for r in client.get("/api/admin/inquiries", headers=ADMIN).json()["inquiries"] if r["id"] == inquiry)
     assert record["student"] == {"name": user.name, "email": user.email, "deleted": True}
+
+    report = {r["id"]: r for r in client.get("/api/admin/inquiries", headers=ADMIN).json()["inquiries"]}
+    # Settled questions keep their state; open ones are closed, with their tickets kept.
+    assert report[answered]["status"] == "answered" and report[answered]["closedAt"] is None
+    assert report[resolved]["status"] == "resolved"
+    assert report[resolved]["ticket"]["answer"] == "Yes, file the form before week 3."
+    assert report[rerouted]["status"] == "closed" and report[rerouted]["closedAt"]
+    assert report[pending]["status"] == "closed" and report[pending]["ticket"]["ref"] == tickets[pending]
+    assert all(report[i]["student"]["deleted"] for i in (answered, rerouted, pending, resolved))
+
+    # The office can no longer answer: nobody would receive it.
+    ref, token = tickets[pending, "link"]
+    page = client.get(f"/answer/{ref}", params={"t": token})
+    assert page.status_code == 410 and "account has been deleted" in page.text
+    assert client.post(f"/answer/{ref}", data={"t": token, "answer": "Yes."}).status_code == 410

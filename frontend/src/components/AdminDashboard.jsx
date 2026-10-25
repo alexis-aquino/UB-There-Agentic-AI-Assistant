@@ -7,7 +7,7 @@ import AdminKnowledge from './AdminKnowledge.jsx';
 import MonthPicker from './MonthPicker.jsx';
 import ThemeToggle from './ThemeToggle.jsx';
 
-const FILTER_ORDER = ['answered', 'rerouted', 'pending', 'resolved', 'flagged'];
+const FILTER_ORDER = ['answered', 'rerouted', 'pending', 'resolved', 'closed', 'flagged'];
 const PAGE = 25;
 
 // The three views under the report's figures, each its own tab (and its own #admin/<tab>, so a reload keeps it).
@@ -123,28 +123,38 @@ function Timeline({ q }) {
         detail: q.ticket.ref,
         state: 'done',
       });
-      steps.push(
-        q.status === 'resolved'
-          ? {
-              title: 'Resolved',
-              at: q.resolvedAt,
-              detail: `Answered by ${q.ticket.answeredBy}`,
-              quote: q.ticket.answer,
-              state: 'done',
-            }
-          : {
-              title: 'Pending',
-              detail: 'Waiting for the office. The student will see the answer under “My questions”.',
-              state: 'current',
-            },
-      );
-    } else {
+      if (q.status === 'resolved') {
+        steps.push({
+          title: 'Resolved',
+          at: q.resolvedAt,
+          detail: `Answered by ${q.ticket.answeredBy}`,
+          quote: q.ticket.answer,
+          state: 'done',
+        });
+      } else if (q.status !== 'closed') {
+        steps.push({
+          title: 'Pending',
+          detail: 'Waiting for the office. The student will see the answer under “My questions”.',
+          state: 'current',
+        });
+      }
+    } else if (q.status !== 'closed') {
       steps.push({
         title: 'Not sent to an office yet',
         detail: 'The student hasn’t asked an office.',
         state: 'idle',
       });
     }
+  }
+  if (q.status === 'closed') {
+    steps.push({
+      title: 'Closed',
+      at: q.closedAt,
+      detail: q.ticket
+        ? 'The student’s account was deleted before the office answered, so it can no longer be answered.'
+        : 'The student’s account was deleted before it was sent to an office.',
+      state: 'stopped',
+    });
   }
   if (q.flag) {
     steps.push({
@@ -491,7 +501,7 @@ export default function AdminDashboard({ user, token, theme, onBack }) {
   const asked = report?.totals;
   const before = report?.before;
   const scope = single ? 'this month' : 'this period';
-  const sent = s.pending + s.resolved;
+  const sent = report?.sent ?? 0;
   const ranked = report?.topics.filter((t) => t.inPeriod > 0).slice(0, 7) ?? []; // the top seven only
   const topMax = Math.max(1, ...ranked.map((t) => t.inPeriod));
 
@@ -597,6 +607,11 @@ export default function AdminDashboard({ user, token, theme, onBack }) {
                   <dt>{STATES.resolved.label}</dt>
                   <dd>{s.resolved}</dd>
                   <span className="adm-delta">{percent(s.resolved, sent)}% of those sent to offices</span>
+                </div>
+                <div>
+                  <dt>{STATES.closed.label}</dt>
+                  <dd>{s.closed}</dd>
+                  <span className="adm-delta">student’s account deleted</span>
                 </div>
                 <div>
                   <dt>{STATES.flagged.label}</dt>

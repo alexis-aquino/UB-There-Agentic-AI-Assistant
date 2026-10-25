@@ -35,7 +35,8 @@ CREATE TABLE IF NOT EXISTS inquiries (
     asked_at TEXT NOT NULL,
     replied_at TEXT NOT NULL,
     flagged_by TEXT,
-    flagged_at TEXT
+    flagged_at TEXT,
+    closed_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_inquiries_asked ON inquiries(asked_at);
 """
@@ -49,9 +50,10 @@ class Memory:
         self._connection = sqlite3.connect(str(db_path), check_same_thread=False)
         self._connection.row_factory = sqlite3.Row
         self._connection.executescript(SCHEMA)
-        # Who asked, saved onto the question when their account is deleted (added later).
+        # Added later: who asked, saved onto the question when their account is deleted, and when
+        # the question was closed because of that deletion.
         columns = {row["name"] for row in self._connection.execute("PRAGMA table_info(inquiries)")}
-        for column in ("asker_name", "asker_email"):
+        for column in ("asker_name", "asker_email", "closed_at"):
             if column not in columns:
                 self._connection.execute(f"ALTER TABLE inquiries ADD COLUMN {column} TEXT")
         self._connection.commit()
@@ -119,6 +121,21 @@ class Memory:
                 "WHERE user_id IS NOT NULL GROUP BY user_id"
             ).fetchall()
         return {row["user_id"]: (row["n"], row["last"]) for row in rows}
+
+    def for_users(self, user_ids: list[int]) -> list[sqlite3.Row]:
+        with self._lock:
+            return self._connection.execute(
+                f"SELECT * FROM inquiries WHERE user_id IN ({','.join('?' * len(user_ids))})", user_ids
+            ).fetchall()
+
+    def close(self, inquiry_ids: list[int], at: str) -> None:
+        """Mark questions Closed: their student's account was deleted while they were still open."""
+        with self._lock:
+            self._connection.executemany(
+                "UPDATE inquiries SET closed_at = ? WHERE id = ? AND closed_at IS NULL",
+                [(at, i) for i in inquiry_ids],
+            )
+            self._connection.commit()
 
     def keep_asker(self, askers: dict[int, tuple[str, str]]) -> None:
         """Before accounts are deleted: save each one's name and email onto its questions, so the

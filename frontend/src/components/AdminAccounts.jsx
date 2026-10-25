@@ -189,7 +189,7 @@ export default function AdminAccounts({ user, token }) {
         >
           <p>
             {confirm.action === 'delete'
-              ? `Delete ${confirm.label}? The account and its office questions are removed for good; its chat questions stay in the report under their name. This can’t be undone.`
+              ? `Delete ${confirm.label}? The account is removed for good. Its questions stay in the report under their name, and any still open are marked Closed. This can’t be undone.`
               : `Disable ${confirm.label}? They won’t be able to sign in until an administrator enables them again.`}
           </p>
           <div className="adm-callout-actions">

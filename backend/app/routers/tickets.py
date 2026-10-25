@@ -12,7 +12,7 @@ from app.config import get_settings
 from app.routers.auth import current_user, get_store
 from app.schemas import OfficeList, TicketCreate, TicketOut
 from app.tickets.offices import get_office, load_offices, suggest_office
-from app.tickets.pages import answer_page, not_found_page
+from app.tickets.pages import answer_page, closed_page, not_found_page
 from app.tickets.store import Ticket, TicketStore
 
 logger = logging.getLogger(__name__)
@@ -135,7 +135,9 @@ def answer_form(ref: str, t: str = "") -> HTMLResponse:
     if ticket is None:
         return HTMLResponse(not_found_page(), status_code=404)
     student = get_store().get(ticket.user_id)
-    return HTMLResponse(answer_page(ticket, student.name if student else "a student", t))
+    if student is None:  # account deleted
+        return HTMLResponse(closed_page(ticket), status_code=410)
+    return HTMLResponse(answer_page(ticket, student.name, t))
 
 
 @router.post("/answer/{ref}", response_class=HTMLResponse, include_in_schema=False)
@@ -150,7 +152,9 @@ def submit_answer(
     if ticket is None:
         return HTMLResponse(not_found_page(), status_code=404)
     student = get_store().get(ticket.user_id)
-    student_name = student.name if student else "a student"
+    if student is None:  # account deleted: the answer would reach nobody
+        return HTMLResponse(closed_page(ticket), status_code=410)
+    student_name = student.name
 
     answer = answer.strip()[:5000]
     if not answer:

@@ -159,12 +159,6 @@ class TicketStore:
             self._connection.commit()
         return self.get(ticket_id)
 
-    def delete_for_users(self, user_ids: list[int]) -> None:
-        """A deleted account's office questions go with it."""
-        with self._lock:
-            self._connection.executemany("DELETE FROM tickets WHERE user_id = ?", [(i,) for i in user_ids])
-            self._connection.commit()
-
     def delete(self, ticket_id: int) -> None:
         with self._lock:
             self._connection.execute("DELETE FROM tickets WHERE id = ?", (ticket_id,))

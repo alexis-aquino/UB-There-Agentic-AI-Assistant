@@ -167,8 +167,12 @@ was last used (signing in, opening the app, or asking a question) and how many q
 
 - **Disable** stops an account signing in, and signs it out on its next request. **Enable** undoes it.
 - **Delete** is allowed only after an account has been disabled for 30 days
-  (`ACCOUNT_DELETE_AFTER_DAYS` in `backend\.env`). It removes the account and its office tickets;
-  its chat questions stay in the Inquiry report under the student's name, marked "Account deleted".
+  (`ACCOUNT_DELETE_AFTER_DAYS` in `backend\.env`). It removes the account but keeps its history:
+  its questions stay in the Inquiry report under the student's name, marked "Account deleted", and
+  its office tickets are kept. Questions that were still Rerouted or Pending become **Closed**, since
+  nobody can follow them up any more; the office's answer link says the question is closed and no
+  longer takes answers. Answered and Resolved questions keep their state. A flagged question still
+  shows as flagged.
 - An administrator can't disable or delete their own account.
 
 ## Asking an office

@@ -22,9 +22,14 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 
 def _status(row: sqlite3.Row, ticket: Ticket | None) -> str:
-    """answered (by the chatbot) | rerouted (it couldn't) -> pending (sent to an office) -> resolved."""
+    """answered (by the chatbot) | rerouted (it couldn't) -> pending (sent to an office) -> resolved.
+    closed: still rerouted or pending when the student's account was deleted, so it never will be."""
+    if ticket and ticket.status == "answered":
+        return "resolved"
+    if row["closed_at"]:
+        return "closed"
     if ticket:
-        return "resolved" if ticket.status == "answered" else "pending"
+        return "pending"
     return "answered" if row["answered"] else "rerouted"
 
 
@@ -49,6 +54,7 @@ def _record(row: sqlite3.Row, ticket: Ticket | None, students: dict[int, User | 
         "repliedAt": row["replied_at"],
         "escalatedAt": ticket.created_at if ticket else None,
         "resolvedAt": ticket.answered_at if ticket else None,
+        "closedAt": row["closed_at"],
         "ticket": (
             {
                 "ref": ticket.ref,
@@ -158,8 +164,9 @@ def enable_accounts(body: AccountsRequest, admin: User = Depends(admin_user)) ->
 
 @router.post("/accounts/delete")
 def delete_accounts(body: AccountsRequest, admin: User = Depends(admin_user)) -> dict:
-    """Deletes accounts that have been disabled for account_delete_after_days. Their office
-    questions go too; their chat questions stay in the report, still under their name."""
+    """Deletes accounts that have been disabled for account_delete_after_days. Their history stays:
+    questions keep their name in the report, office tickets are kept (the office can no longer answer
+    them, see tickets.answer_form), and questions still open are marked Closed."""
     wait = get_settings().account_delete_after_days
     rows = {row["id"]: row for row in get_store().all_rows()}
     ready = [
@@ -172,7 +179,13 @@ def delete_accounts(body: AccountsRequest, admin: User = Depends(admin_user)) ->
             status_code=400,
             detail=f"Only accounts disabled for at least {wait} days can be deleted, and not your own.",
         )
-    get_tickets().delete_for_users(ready)
-    get_memory().keep_asker({i: (rows[i]["name"], rows[i]["email"]) for i in ready})
+    memory = get_memory()
+    if ready:
+        tickets = get_tickets().by_inquiry()
+        still_open = [
+            row["id"] for row in memory.for_users(ready) if _status(row, tickets.get(row["id"])) in ("rerouted", "pending")
+        ]
+        memory.close(still_open, datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"))
+    memory.keep_asker({i: (rows[i]["name"], rows[i]["email"]) for i in ready})
     get_store().delete(ready)
     return _accounts()

@@ -3,6 +3,7 @@
 // Where an inquiry is in its life, in staff's words. A record's `status` moves forward only:
 //   answered (the chatbot answered it), or rerouted (it couldn't) -> pending (sent to an office,
 //   no answer yet) -> resolved (the office answered).
+//   closed: still rerouted or pending when the student's account was deleted (set by the backend).
 // A flagged inquiry shows as "Offensive or off-topic" whatever its status; clearing the flag
 // brings the status back.
 export const STATES = {
@@ -10,6 +11,7 @@ export const STATES = {
   rerouted: { label: 'Rerouted', tone: 'warn' },
   pending: { label: 'Pending', tone: 'wait' },
   resolved: { label: 'Resolved', tone: 'ok' },
+  closed: { label: 'Closed', tone: 'muted' },
   flagged: { label: 'Offensive or off-topic', tone: 'danger' },
 };
 
@@ -76,6 +78,7 @@ export function buildReport(records, selected) {
 
   const status = Object.fromEntries(Object.keys(STATES).map((key) => [key, 0]));
   for (const r of current) status[stateOf(r)] += 1;
+  const sent = current.filter((r) => r.ticket).length; // sent to an office, whatever came of it
 
   const repeats = new Map();
   for (const r of current) {
@@ -88,7 +91,7 @@ export function buildReport(records, selected) {
   }
   const topQuestions = [...repeats.values()].sort((a, b) => b.count - a.count).slice(0, 8);
 
-  return { period, inPeriod, months, volume, totals, before, topics, status, topQuestions };
+  return { period, inPeriod, months, volume, totals, before, topics, status, sent, topQuestions };
 }
 
 export function filterRecords(records, { months, status, topic, search }) {
