@@ -41,7 +41,13 @@ def _user_out(user: User) -> UserOut:
     return UserOut(**asdict(user), guest=not _in_domain(user.email), admin=is_admin(user))
 
 
+DISABLED = "This account has been disabled by an administrator."
+
+
 def _session(user: User, created: bool = False) -> AuthResponse:
+    if user.disabled:
+        raise HTTPException(status_code=403, detail=DISABLED)
+    get_store().touch(user.id)
     token = issue_token(user.id, get_store().secret, get_settings().session_days)
     return AuthResponse(token=token, user=_user_out(user), created=created)
 
@@ -52,6 +58,9 @@ def current_user(authorization: str = Header(default="")) -> User:
     user = get_store().get(user_id) if user_id is not None else None
     if user is None:
         raise HTTPException(status_code=401, detail="Please sign in again.")
+    if user.disabled:
+        # 401, so the app signs them out at once.
+        raise HTTPException(status_code=401, detail=DISABLED)
     return user
 
 
@@ -122,6 +131,7 @@ def google(body: GoogleLoginRequest) -> AuthResponse:
 
 @router.get("/me", response_model=UserOut)
 def me(user: User = Depends(current_user)) -> UserOut:
+    get_store().touch(user.id)  # each time the app is opened
     return _user_out(user)
 
 

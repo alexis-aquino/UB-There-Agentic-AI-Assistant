@@ -6,6 +6,7 @@ import secrets
 import sqlite3
 import threading
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 from app.auth.security import hash_password, verify_password
@@ -29,6 +30,18 @@ CREATE TABLE IF NOT EXISTS meta (
 """
 
 
+# Added after the first release; older users.db files get them on startup.
+COLUMNS = {
+    "last_active_at": "TEXT",  # last sign-in or visit, ISO UTC
+    "disabled_by": "TEXT",  # the administrator who disabled the account; NULL = enabled
+    "disabled_at": "TEXT",
+}
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
 class EmailTakenError(Exception):
     pass
 
@@ -41,6 +54,7 @@ class User:
     picture: str | None
     google_linked: bool
     default_password: bool
+    disabled: bool = False  # by an administrator: can't sign in
 
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> "User":
@@ -51,6 +65,7 @@ class User:
             picture=row["picture"],
             google_linked=row["google_sub"] is not None,
             default_password=bool(row["default_password"]),
+            disabled=row["disabled_by"] is not None,
         )
 
 
@@ -62,6 +77,10 @@ class UserStore:
         self._connection = sqlite3.connect(str(db_path), check_same_thread=False)
         self._connection.row_factory = sqlite3.Row
         self._connection.executescript(SCHEMA)
+        existing = {row["name"] for row in self._connection.execute("PRAGMA table_info(users)")}
+        for column, kind in COLUMNS.items():
+            if column not in existing:
+                self._connection.execute(f"ALTER TABLE users ADD COLUMN {column} {kind}")
         self._connection.commit()
         self.secret = self._signing_secret()
 
@@ -157,3 +176,40 @@ class UserStore:
             )
             self._connection.commit()
         return True
+
+    # ---------- account management (admin dashboard) ----------
+
+    def touch(self, user_id: int) -> None:
+        """Note that the account was just used, for "last used" on the admin's Accounts page."""
+        with self._lock:
+            self._connection.execute("UPDATE users SET last_active_at = ? WHERE id = ?", (now_iso(), user_id))
+            self._connection.commit()
+
+    def all_rows(self) -> list[sqlite3.Row]:
+        """Every account, with the columns the admin's Accounts page shows (never the password hash)."""
+        with self._lock:
+            return self._connection.execute(
+                "SELECT id, email, name, google_sub IS NOT NULL AS google_linked, created_at, "
+                "last_active_at, disabled_by, disabled_at FROM users ORDER BY id"
+            ).fetchall()
+
+    def set_disabled(self, user_ids: list[int], by: str | None) -> None:
+        """Disable the accounts (by an administrator's name), or enable them again with `by` None.
+        Disabling an account that is already disabled keeps the original date."""
+        with self._lock:
+            for user_id in user_ids:
+                if by is None:
+                    self._connection.execute(
+                        "UPDATE users SET disabled_by = NULL, disabled_at = NULL WHERE id = ?", (user_id,)
+                    )
+                else:
+                    self._connection.execute(
+                        "UPDATE users SET disabled_by = ?, disabled_at = ? WHERE id = ? AND disabled_by IS NULL",
+                        (by, now_iso(), user_id),
+                    )
+            self._connection.commit()
+
+    def delete(self, user_ids: list[int]) -> None:
+        with self._lock:
+            self._connection.executemany("DELETE FROM users WHERE id = ?", [(i,) for i in user_ids])
+            self._connection.commit()

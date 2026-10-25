@@ -2,37 +2,45 @@ import { useEffect, useState } from 'react';
 import {
   accountState,
   daysUntilDeletable,
+  deleteAccounts,
+  disableAccounts,
+  enableAccounts,
   loadAccounts,
-  loadDeleted,
-  loadDisabled,
-  saveDeleted,
-  saveDisabled,
 } from '../admin/accounts.js';
 import { ago, day } from '../admin/store.js';
 
 const UNUSED_DAYS = 60; // "Not used": no use in the last 2 months, or never
 const STATE_LABELS = { active: 'Active', inactive: 'Not used', disabled: 'Disabled' };
 const STATE_TONES = { active: 'ok', inactive: 'warn', disabled: 'danger' };
+const ROLE_TAGS = { admin: 'Admin', guest: 'Guest' };
 
 /** Every account, how recently it was used, disabling the ones nobody uses, and deleting those
- * that have stayed disabled for a month. */
-export default function AdminAccounts({ user, records }) {
+ * that have stayed disabled for a month. All of it is stored by the backend. */
+export default function AdminAccounts({ user, token }) {
   const [accounts, setAccounts] = useState(null);
-  const [disabled, setDisabled] = useState(loadDisabled);
-  const [deleted, setDeleted] = useState(loadDeleted);
+  const [wait, setWait] = useState(30); // days disabled before an account can be deleted
+  const [loadError, setLoadError] = useState(null);
+  const [busy, setBusy] = useState(false);
   const [filter, setFilter] = useState('');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(() => new Set());
   const [confirm, setConfirm] = useState(null); // { action: 'disable' | 'delete', emails, label } waiting for a yes
   const [note, setNote] = useState('');
 
+  const show = (data) => {
+    setAccounts(data.accounts);
+    setWait(data.deleteAfterDays);
+  };
+
   useEffect(() => {
-    // Deleted accounts are gone from the list for good.
-    loadAccounts(records, user).then((list) => setAccounts(list.filter((a) => !deleted[a.email])));
-  }, [records, user, deleted]);
+    loadAccounts(token)
+      .then(show)
+      .catch((err) => setLoadError(err.message));
+  }, [token]);
 
   const isMe = (a) => a.email.toLowerCase() === user.email.toLowerCase();
-  const stateOf = (a) => accountState(a, disabled, UNUSED_DAYS);
+  const stateOf = (a) => accountState(a, UNUSED_DAYS);
+  const canDelete = (a) => a.disabled && daysUntilDeletable(a.disabled, wait) === 0;
 
   const counts = { active: 0, inactive: 0, disabled: 0 };
   for (const a of accounts ?? []) counts[stateOf(a)] += 1;
@@ -44,45 +52,36 @@ export default function AdminAccounts({ user, records }) {
       (!text || a.name.toLowerCase().includes(text) || a.email.toLowerCase().includes(text)),
   );
   const unused = (accounts ?? []).filter((a) => stateOf(a) === 'inactive' && !isMe(a));
-  const deletable = (accounts ?? []).filter((a) => disabled[a.email] && daysUntilDeletable(disabled[a.email]) === 0);
+  const deletable = (accounts ?? []).filter(canDelete);
   const picked = shown.filter((a) => selected.has(a.email));
 
-  function update(next) {
-    setDisabled(next);
-    saveDisabled(next);
-    setSelected(new Set());
-    setConfirm(null);
+  // Runs an action on the backend, which answers with the whole list as it now stands.
+  async function run(action, emails, done) {
+    const ids = accounts.filter((a) => emails.includes(a.email)).map((a) => a.id);
+    if (!ids.length) return;
+    setBusy(true);
     setNote('');
-  }
-
-  // Only accounts disabled for a month or more; the account and its disabled mark both go.
-  function remove(emails) {
-    const ok = emails.filter((email) => disabled[email] && daysUntilDeletable(disabled[email]) === 0);
-    const stamp = { by: user.name, at: new Date().toISOString() };
-    const nextDeleted = { ...deleted };
-    const nextDisabled = { ...disabled };
-    for (const email of ok) {
-      nextDeleted[email] = stamp;
-      delete nextDisabled[email];
+    try {
+      show(await action(token, ids));
+      setSelected(new Set());
+      setConfirm(null);
+      if (done) setNote(done(ids.length));
+    } catch (err) {
+      setNote(err.message);
+    } finally {
+      setBusy(false);
     }
-    setDeleted(nextDeleted);
-    saveDeleted(nextDeleted);
-    update(nextDisabled);
-    setNote(`Deleted ${ok.length} account${ok.length === 1 ? '' : 's'}.`);
   }
 
-  function disable(emails) {
-    const stamp = { by: user.name, at: new Date().toISOString() };
-    const next = { ...disabled };
-    for (const email of emails) if (!next[email]) next[email] = stamp;
-    update(next);
-  }
-
-  function enable(emails) {
-    const next = { ...disabled };
-    for (const email of emails) delete next[email];
-    update(next);
-  }
+  // Only accounts disabled for a month or more.
+  const remove = (emails) =>
+    run(
+      deleteAccounts,
+      emails.filter((email) => deletable.some((a) => a.email === email)),
+      (n) => `Deleted ${n} account${n === 1 ? '' : 's'}.`,
+    );
+  const disable = (emails) => run(disableAccounts, emails);
+  const enable = (emails) => run(enableAccounts, emails);
 
   function toggle(email) {
     const next = new Set(selected);
@@ -94,6 +93,7 @@ export default function AdminAccounts({ user, records }) {
   const selectable = shown.filter((a) => !isMe(a));
   const allPicked = selectable.length > 0 && selectable.every((a) => selected.has(a.email));
 
+  if (loadError) return <p className="voice-hint">Couldn’t load accounts: {loadError}</p>;
   if (!accounts) return <p className="voice-hint">Loading accounts…</p>;
 
   return (
@@ -104,7 +104,7 @@ export default function AdminAccounts({ user, records }) {
           <p className="adm-sub">
             Everyone with a UB There account and when they last used it. An account is “Not used” after 2 months without
             use. Disabling keeps the account and its history, and it can be enabled again. An account that has been
-            disabled for a month can be deleted for good.
+            disabled for {wait} days can be deleted for good.
           </p>
         </div>
       </div>
@@ -141,7 +141,7 @@ export default function AdminAccounts({ user, records }) {
         <div className="adm-callout is-danger">
           <p>
             <strong>{deletable.length}</strong> {deletable.length === 1 ? 'account has' : 'accounts have'} been disabled
-            for over a month and can be deleted.
+            for {wait} days or more and can be deleted.
           </p>
           <button
             type="button"
@@ -189,13 +189,14 @@ export default function AdminAccounts({ user, records }) {
         >
           <p>
             {confirm.action === 'delete'
-              ? `Delete ${confirm.label}? The account and its history are removed for good. This can’t be undone.`
+              ? `Delete ${confirm.label}? The account and its office questions are removed for good; its chat questions stay in the report under their name. This can’t be undone.`
               : `Disable ${confirm.label}? They won’t be able to sign in until an administrator enables them again.`}
           </p>
           <div className="adm-callout-actions">
             <button
               type="button"
               className="adm-danger-button"
+              disabled={busy}
               onClick={() => (confirm.action === 'delete' ? remove(confirm.emails) : disable(confirm.emails))}
             >
               {confirm.action === 'delete' ? 'Delete for good' : 'Disable'}
@@ -239,25 +240,25 @@ export default function AdminAccounts({ user, records }) {
                 onClick={() =>
                   setConfirm({
                     action: 'disable',
-                    emails: picked.filter((a) => !disabled[a.email]).map((a) => a.email),
-                    label: `the ${picked.filter((a) => !disabled[a.email]).length} selected account${picked.filter((a) => !disabled[a.email]).length === 1 ? '' : 's'}`,
+                    emails: picked.filter((a) => !a.disabled).map((a) => a.email),
+                    label: `the ${picked.filter((a) => !a.disabled).length} selected account${picked.filter((a) => !a.disabled).length === 1 ? '' : 's'}`,
                   })
                 }
-                disabled={picked.every((a) => disabled[a.email])}
+                disabled={picked.every((a) => a.disabled)}
               >
-                Disable selected ({picked.filter((a) => !disabled[a.email]).length})
+                Disable selected ({picked.filter((a) => !a.disabled).length})
               </button>
-              {picked.some((a) => disabled[a.email]) && (
+              {picked.some((a) => a.disabled) && (
                 <button type="button" className="link-button" onClick={() => enable(picked.map((a) => a.email))}>
-                  Enable selected ({picked.filter((a) => disabled[a.email]).length})
+                  Enable selected ({picked.filter((a) => a.disabled).length})
                 </button>
               )}
-              {picked.some((a) => deletable.includes(a)) && (
+              {picked.some(canDelete) && (
                 <button
                   type="button"
                   className="link-button adm-danger-link"
                   onClick={() => {
-                    const list = picked.filter((a) => deletable.includes(a));
+                    const list = picked.filter(canDelete);
                     setConfirm({
                       action: 'delete',
                       emails: list.map((a) => a.email),
@@ -265,7 +266,7 @@ export default function AdminAccounts({ user, records }) {
                     });
                   }}
                 >
-                  Delete selected ({picked.filter((a) => deletable.includes(a)).length})
+                  Delete selected ({picked.filter(canDelete).length})
                 </button>
               )}
             </>
@@ -302,7 +303,7 @@ export default function AdminAccounts({ user, records }) {
             <tbody>
               {shown.map((a) => {
                 const state = stateOf(a);
-                const off = disabled[a.email];
+                const off = a.disabled;
                 return (
                   <tr key={a.email} className={state === 'disabled' ? 'is-disabled' : ''}>
                     <td className="adm-check-col">
@@ -318,7 +319,7 @@ export default function AdminAccounts({ user, records }) {
                     <td>
                       <span className="adm-account-name">
                         {a.name}
-                        {a.role === 'admin' && <span className="adm-tag">Admin</span>}
+                        {ROLE_TAGS[a.role] && <span className="adm-tag">{ROLE_TAGS[a.role]}</span>}
                         {isMe(a) && <span className="adm-tag">You</span>}
                       </span>
                       <span className="adm-log-ref">{a.email}</span>
@@ -334,8 +335,8 @@ export default function AdminAccounts({ user, records }) {
                       {off && (
                         <span className="adm-log-ref">
                           by {off.by}, {day(off.at)}
-                          {daysUntilDeletable(off) > 0 &&
-                            ` · can be deleted in ${daysUntilDeletable(off)} day${daysUntilDeletable(off) === 1 ? '' : 's'}`}
+                          {daysUntilDeletable(off, wait) > 0 &&
+                            ` · can be deleted in ${daysUntilDeletable(off, wait)} day${daysUntilDeletable(off, wait) === 1 ? '' : 's'}`}
                         </span>
                       )}
                     </td>
@@ -345,7 +346,7 @@ export default function AdminAccounts({ user, records }) {
                           <button type="button" className="link-button" onClick={() => enable([a.email])}>
                             Enable
                           </button>
-                          {daysUntilDeletable(off) === 0 && (
+                          {daysUntilDeletable(off, wait) === 0 && (
                             <button
                               type="button"
                               className="link-button adm-danger-link"

@@ -162,6 +162,15 @@ and, if it was sent to an office, the ticket and the office's answer. Flags for 
 off-topic questions are saved in the backend. All of it lives in `backend\brain_memory.db` (questions)
 and `backend\tickets.db` (office tickets). Questions asked before this was added aren't in it.
 
+**Accounts** lists every real account in `backend\users.db`: how it signs in, when it joined, when it
+was last used (signing in, opening the app, or asking a question) and how many questions it asked.
+
+- **Disable** stops an account signing in, and signs it out on its next request. **Enable** undoes it.
+- **Delete** is allowed only after an account has been disabled for 30 days
+  (`ACCOUNT_DELETE_AFTER_DAYS` in `backend\.env`). It removes the account and its office tickets;
+  its chat questions stay in the Inquiry report under the student's name, marked "Account deleted".
+- An administrator can't disable or delete their own account.
+
 ## Asking an office
 
 When the assistant can't answer, or isn't sure, its reply shows **Ask an office**. The student

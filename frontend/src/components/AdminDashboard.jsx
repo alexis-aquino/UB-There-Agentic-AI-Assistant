@@ -97,7 +97,7 @@ function Timeline({ q }) {
     {
       title: 'Asked',
       at: q.askedAt,
-      detail: q.student ? `by ${q.student.name}` : 'Not signed in',
+      detail: q.student ? `by ${q.student.name}${q.student.deleted ? ' (account deleted)' : ''}` : 'Not signed in',
       state: 'done',
     },
   ];
@@ -528,20 +528,14 @@ export default function AdminDashboard({ user, token, theme, onBack }) {
         ))}
       </nav>
 
-      {section !== 'report' && (
+      {section === 'knowledge' && (
         <div className="notice" role="status">
           <span className="label">Sample data</span>
-          <span>
-            {section === 'accounts' &&
-              'Built from the students who asked questions, plus made-up accounts. Sign-in type and join dates are made up too, and disabling is saved only in this browser until the backend supports it.'}
-            {section === 'knowledge' &&
-              'Changes here are saved only in this browser. The assistant uses them once the backend can index them.'}
-          </span>
+          <span>Changes here are saved only in this browser. The assistant uses them once the backend can index them.</span>
         </div>
       )}
 
-      {section === 'accounts' &&
-        (records ? <AdminAccounts user={user} records={records} /> : <p className="voice-hint">Loading accounts…</p>)}
+      {section === 'accounts' && <AdminAccounts user={user} token={token} />}
 
       {section === 'knowledge' && <AdminKnowledge user={user} />}
 
@@ -801,7 +795,10 @@ export default function AdminDashboard({ user, token, theme, onBack }) {
                                     {q.question}
                                   </button>
                                 </td>
-                                <td className="adm-log-muted">{q.student?.name ?? 'Not signed in'}</td>
+                                <td className="adm-log-muted">
+                                  {q.student?.name ?? 'Not signed in'}
+                                  {q.student?.deleted && <span className="adm-log-ref">Account deleted</span>}
+                                </td>
                                 <td className="adm-log-muted">{q.topic}</td>
                                 <td className="adm-log-muted">{when(q.askedAt)}</td>
                                 <td>

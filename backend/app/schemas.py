@@ -129,3 +129,9 @@ class TicketOut(BaseModel):
 
 class FlagRequest(BaseModel):
     flagged: bool
+
+
+class AccountsRequest(BaseModel):
+    """The accounts an action applies to, by id."""
+
+    ids: list[int] = Field(min_length=1, max_length=1000)

@@ -49,6 +49,11 @@ class Memory:
         self._connection = sqlite3.connect(str(db_path), check_same_thread=False)
         self._connection.row_factory = sqlite3.Row
         self._connection.executescript(SCHEMA)
+        # Who asked, saved onto the question when their account is deleted (added later).
+        columns = {row["name"] for row in self._connection.execute("PRAGMA table_info(inquiries)")}
+        for column in ("asker_name", "asker_email"):
+            if column not in columns:
+                self._connection.execute(f"ALTER TABLE inquiries ADD COLUMN {column} TEXT")
         self._connection.commit()
 
     def log_turn(self, session_id: str, role: str, message: str) -> None:
@@ -103,6 +108,25 @@ class Memory:
         with self._lock:
             self._connection.execute(
                 "UPDATE inquiries SET flagged_by = ?, flagged_at = ? WHERE id = ?", (by, at, inquiry_id)
+            )
+            self._connection.commit()
+
+    def activity_by_user(self) -> dict[int, tuple[int, str]]:
+        """For each signed-in student: how many questions they asked, and when they last asked one."""
+        with self._lock:
+            rows = self._connection.execute(
+                "SELECT user_id, COUNT(*) AS n, MAX(asked_at) AS last FROM inquiries "
+                "WHERE user_id IS NOT NULL GROUP BY user_id"
+            ).fetchall()
+        return {row["user_id"]: (row["n"], row["last"]) for row in rows}
+
+    def keep_asker(self, askers: dict[int, tuple[str, str]]) -> None:
+        """Before accounts are deleted: save each one's name and email onto its questions, so the
+        report still shows who asked. `askers` is {user_id: (name, email)}."""
+        with self._lock:
+            self._connection.executemany(
+                "UPDATE inquiries SET asker_name = ?, asker_email = ?, user_id = NULL WHERE user_id = ?",
+                [(name, email, user_id) for user_id, (name, email) in askers.items()],
             )
             self._connection.commit()
 

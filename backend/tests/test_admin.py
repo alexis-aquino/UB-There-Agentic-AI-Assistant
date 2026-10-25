@@ -117,3 +117,60 @@ def test_chat_logs_the_question_with_the_signed_in_student(index):
     assert record["status"] == "answered"
     # Small talk isn't an inquiry.
     assert client.post("/api/chat", json={"message": "Hello!", "session_id": "adm"}).json()["inquiry_id"] is None
+
+
+# ---------- accounts ----------
+
+
+def accounts():
+    return {a["email"]: a for a in client.get("/api/admin/accounts", headers=ADMIN).json()["accounts"]}
+
+
+def test_accounts_list_real_users_with_their_activity():
+    _, user = account(unique("active", "ub.edu.ph"))
+    log(user_id=user.id)
+    log("When is the tuition payment due?", user_id=user.id)
+    listed = accounts()[user.email]
+    assert listed["questions"] == 2
+    assert listed["lastActiveAt"] and listed["createdAt"]
+    assert listed["role"] == "student" and listed["disabled"] is None
+    assert accounts()["boss@ub.edu.ph"]["role"] == "admin"
+    assert accounts()["boss@ub.edu.ph"]["signIn"] == "UB mail"
+    student, _ = account(unique("nosy", "ub.edu.ph"))
+    assert client.get("/api/admin/accounts", headers=student).status_code == 403
+
+
+def test_a_disabled_account_is_signed_out_and_cannot_sign_in():
+    headers, user = account(unique("off", "example.com"))
+    client.post("/api/admin/accounts/disable", json={"ids": [user.id]}, headers=ADMIN)
+    assert accounts()[user.email]["disabled"]["by"] == ADMIN_USER.name
+    assert client.get("/api/auth/me", headers=headers).status_code == 401
+    login = client.post("/api/auth/login", json={"email": user.email, "password": "12345678"})
+    assert login.status_code == 403
+    client.post("/api/admin/accounts/enable", json={"ids": [user.id]}, headers=ADMIN)
+    assert client.post("/api/auth/login", json={"email": user.email, "password": "12345678"}).status_code == 200
+
+
+def test_admins_cannot_disable_themselves():
+    client.post("/api/admin/accounts/disable", json={"ids": [ADMIN_USER.id]}, headers=ADMIN)
+    assert accounts()["boss@ub.edu.ph"]["disabled"] is None
+
+
+def test_delete_waits_until_disabled_long_enough_and_keeps_who_asked():
+    _, user = account(unique("gone", "ub.edu.ph"))
+    inquiry = log(user_id=user.id)
+    client.post("/api/admin/accounts/disable", json={"ids": [user.id]}, headers=ADMIN)
+    early = client.post("/api/admin/accounts/delete", json={"ids": [user.id]}, headers=ADMIN)
+    assert early.status_code == 400 and user.email in accounts()
+
+    # Pretend it was disabled 31 days ago.
+    store = auth.get_store()
+    with store._lock:
+        store._connection.execute(
+            "UPDATE users SET disabled_at = '2000-01-01T00:00:00Z' WHERE id = ?", (user.id,)
+        )
+        store._connection.commit()
+    assert client.post("/api/admin/accounts/delete", json={"ids": [user.id]}, headers=ADMIN).status_code == 200
+    assert user.email not in accounts()
+    record = next(r for r in client.get("/api/admin/inquiries", headers=ADMIN).json()["inquiries"] if r["id"] == inquiry)
+    assert record["student"] == {"name": user.name, "email": user.email, "deleted": True}
