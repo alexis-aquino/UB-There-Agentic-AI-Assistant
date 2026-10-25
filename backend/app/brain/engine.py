@@ -27,6 +27,7 @@ from app.brain.bm25 import BM25Index
 from app.brain.intents import QUESTION, detect_intent
 from app.brain.llm import ModelUnavailableError, check_models, get_embed_model, get_llm, reply_model_name
 from app.brain.memory import Memory, get_memory
+from app.brain.moderation import flag_reason
 from app.brain.prompts import build_messages
 from app.brain.retriever import HybridRetriever
 from app.brain.topics import topic_of
@@ -271,6 +272,8 @@ def stream_answer(message: str, session_id: str = "default", user_id: int | None
     # Small talk isn't an inquiry; every handbook question is, answered or not.
     inquiry_id = None
     if intent == QUESTION:
+        # Offensive or off-topic questions are flagged for the admin; the student's reply is the same.
+        reason = flag_reason(message, handbook_matched=bool(nodes))
         inquiry_id = brain.memory.log_inquiry(
             session_id,
             user_id,
@@ -281,6 +284,7 @@ def stream_answer(message: str, session_id: str = "default", user_id: int | None
             confidence=confidence,
             asked_at=asked_at,
             replied_at=_now(),
+            flagged_by=f"Assistant · {reason}" if reason else None,
         )
 
     yield {

@@ -158,9 +158,17 @@ admins sign in with Google.
 
 The **Inquiry report** is built from every handbook question asked (small talk like "hi" isn't
 counted): its topic, whether the handbook answered it, the source page, who asked (when signed in),
-and, if it was sent to an office, the ticket and the office's answer. Flags for offensive or
-off-topic questions are saved in the backend. All of it lives in `backend\brain_memory.db` (questions)
-and `backend\tickets.db` (office tickets). Questions asked before this was added aren't in it.
+and, if it was sent to an office, the ticket and the office's answer. All of it lives in
+`backend\brain_memory.db` (questions) and `backend\tickets.db` (office tickets). Questions asked
+before this was added aren't in it.
+
+**Offensive or off-topic.** The assistant flags these itself (shown as "by Assistant · offensive
+language" or "· not about school"): insults or profanity in English or Filipino, and questions the
+handbook didn't cover that aren't about school ("Who will win the NBA finals?", "Tell me a joke").
+The student's reply is the same either way; only the report changes. The rules are keyword lists in
+`backend\app\brain\moderation.py`, so they will sometimes miss one or flag a real question: an admin
+can **Clear flag** on a wrong one, or **Flag** a missed one, in the Inquiry tracker. Flagged questions
+are left out of the most-asked list.
 
 **Accounts** lists every real account in `backend\users.db`: how it signs in, when it joined, when it
 was last used (signing in, opening the app, or asking a question) and how many questions it asked.

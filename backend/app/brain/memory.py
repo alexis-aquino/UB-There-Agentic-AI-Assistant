@@ -86,12 +86,16 @@ class Memory:
         confidence: float,
         asked_at: str,
         replied_at: str,
+        flagged_by: str | None = None,
     ) -> int:
+        """`flagged_by`: set when the assistant flags the question itself (app/brain/moderation.py)."""
+        flagged_at = replied_at if flagged_by else None
         with self._lock:
             cursor = self._connection.execute(
                 "INSERT INTO inquiries (session_id, user_id, question, topic, answered, source, "
-                "confidence, asked_at, replied_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (session_id, user_id, question, topic, int(answered), source, confidence, asked_at, replied_at),
+                "confidence, asked_at, replied_at, flagged_by, flagged_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (session_id, user_id, question, topic, int(answered), source, confidence, asked_at, replied_at,
+                 flagged_by, flagged_at),
             )
             self._connection.commit()
         return cursor.lastrowid
