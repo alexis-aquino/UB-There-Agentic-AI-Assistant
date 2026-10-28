@@ -142,6 +142,20 @@ it, **Admin / Guest login** (`#/guest`) is the email-and-password door, with gue
   Google only allows plain-http sign-in from `localhost`, so the Google button works on the PC
   but not on a phone opening `http://192.168.x.x:5273` — guests' email sign-in works there.
 
+## Signing up
+
+**Sign up** (on the sign-in page) makes an account with a password, choosing what it is:
+
+- **Student**: a @ub.edu.ph address and a department.
+- **Guest**: any email, no department. A @ub.edu.ph address can't sign up as a guest.
+- **University department**: a @ub.edu.ph address and a department. It can sign in at once, but sees
+  only a "waiting for approval" page until an administrator clicks **Approve** in the dashboard's
+  Accounts tab, so nobody can make themselves a department.
+
+The departments to choose from are in `backend\departments.json` (placeholders for now; replace them
+with UB's real list and restart the backend). Once Google sign-in is on (`GOOGLE_CLIENT_ID`), UB
+addresses must use **Sign in with UB Mail** and the form is for guests only.
+
 ## Admin dashboard
 
 Administrators see **Admin dashboard** in the menu (`#admin`). Who counts is set in `backend\.env`,

@@ -3,6 +3,7 @@ from functools import lru_cache
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 
+from app.auth.departments import load_departments
 from app.auth.google import GoogleTokenError, verify_id_token
 from app.auth.security import issue_token, read_token
 from app.auth.store import EmailTakenError, User, UserStore
@@ -37,8 +38,18 @@ def is_admin(user: User) -> bool:
     return _in_domain(user.email) and user.email.lower() in get_settings().admins
 
 
+def kind_of(user: User) -> str:
+    """admin | department | student | guest. Accounts from before account types: a UB address is a
+    student, anything else a guest."""
+    if is_admin(user):
+        return "admin"
+    return user.account_type or ("student" if _in_domain(user.email) else "guest")
+
+
 def _user_out(user: User) -> UserOut:
-    return UserOut(**asdict(user), guest=not _in_domain(user.email), admin=is_admin(user))
+    kind = kind_of(user)
+    fields = {k: v for k, v in asdict(user).items() if k != "account_type"}
+    return UserOut(**fields, guest=kind == "guest", admin=kind == "admin", account_type=kind)
 
 
 DISABLED = "This account has been disabled by an administrator."
@@ -85,22 +96,40 @@ def config() -> AuthConfig:
         google_client_id=settings.google_client_id,
         google_domain=settings.google_domain,
         default_password=settings.default_password,
+        departments=load_departments(),
     )
 
 
 @router.post("/signup", response_model=AuthResponse, status_code=201)
 def signup(body: SignupRequest) -> AuthResponse:
     settings = get_settings()
+    domain = settings.google_domain
     # With Google sign-in on, university addresses must come through Google, so nobody can
-    # claim a @ub.edu.ph identity by typing it into the guest form.
+    # claim a @ub.edu.ph identity by typing it into the sign-up form.
     if settings.google_client_id and _in_domain(body.email):
         raise HTTPException(
             status_code=400,
-            detail=f"@{settings.google_domain} accounts sign in with Google. "
-            "Use the Google button above.",
+            detail=f"@{domain} accounts sign in with Google. Use the Google button above.",
         )
+    department = None
+    if body.account_type == "guest":
+        if _in_domain(body.email):
+            raise HTTPException(status_code=400, detail=f"@{domain} addresses sign up as a student or department.")
+    else:
+        if not _in_domain(body.email):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Students and university departments sign up with their @{domain} UB Mail.",
+            )
+        if body.department not in load_departments():
+            raise HTTPException(status_code=400, detail="Please choose your department.")
+        department = body.department
     try:
-        user = get_store().create(body.email, body.name, body.password)
+        # A university department can sign in at once, but sees nothing of its students until
+        # an administrator approves the account (Accounts page).
+        user = get_store().create(
+            body.email, body.name, body.password, account_type=body.account_type, department=department
+        )
     except EmailTakenError as exc:
         raise HTTPException(status_code=409, detail="An account with that email already exists.") from exc
     return _session(user, created=True)

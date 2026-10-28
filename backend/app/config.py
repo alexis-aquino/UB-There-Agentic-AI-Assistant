@@ -69,6 +69,8 @@ class Settings(BaseSettings):
     # Who can open the admin dashboard, comma-separated. Only addresses in google_domain count,
     # so with Google sign-in on, an admin is always a verified UB account.
     admin_emails: str = ""
+    # The departments students and university departments choose from (sign-up).
+    departments_path: Path = BACKEND_ROOT / "departments.json"
     # An account can be deleted only after it has been disabled this long (admin Accounts page).
     account_delete_after_days: int = 30
 

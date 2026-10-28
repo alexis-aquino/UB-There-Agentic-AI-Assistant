@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   accountState,
+  approveAccounts,
   daysUntilDeletable,
   deleteAccounts,
   disableAccounts,
@@ -12,7 +13,7 @@ import { ago, day } from '../admin/store.js';
 const UNUSED_DAYS = 60; // "Not used": no use in the last 2 months, or never
 const STATE_LABELS = { active: 'Active', inactive: 'Not used', disabled: 'Disabled' };
 const STATE_TONES = { active: 'ok', inactive: 'warn', disabled: 'danger' };
-const ROLE_TAGS = { admin: 'Admin', guest: 'Guest' };
+const ROLE_TAGS = { admin: 'Admin', guest: 'Guest', department: 'Department' };
 
 /** Every account, how recently it was used, disabling the ones nobody uses, and deleting those
  * that have stayed disabled for a month. All of it is stored by the backend. */
@@ -81,6 +82,8 @@ export default function AdminAccounts({ user, token }) {
       (n) => `Deleted ${n} account${n === 1 ? '' : 's'}.`,
     );
   const disable = (emails) => run(disableAccounts, emails);
+  const approve = (emails) =>
+    run(approveAccounts, emails, (n) => `Approved ${n} department account${n === 1 ? '' : 's'}.`);
   const enable = (emails) => run(enableAccounts, emails);
 
   function toggle(email) {
@@ -320,9 +323,11 @@ export default function AdminAccounts({ user, token }) {
                       <span className="adm-account-name">
                         {a.name}
                         {ROLE_TAGS[a.role] && <span className="adm-tag">{ROLE_TAGS[a.role]}</span>}
+                        {a.pending && <span className="adm-tag">Waiting for approval</span>}
                         {isMe(a) && <span className="adm-tag">You</span>}
                       </span>
                       <span className="adm-log-ref">{a.email}</span>
+                      {a.department && <span className="adm-log-ref">{a.department}</span>}
                     </td>
                     <td className="adm-log-muted">{a.signIn}</td>
                     <td className="adm-log-muted">{day(a.createdAt)}</td>
@@ -341,6 +346,11 @@ export default function AdminAccounts({ user, token }) {
                       )}
                     </td>
                     <td className="adm-row-action">
+                      {a.pending && !off && (
+                        <button type="button" className="link-button" disabled={busy} onClick={() => approve([a.email])}>
+                          Approve
+                        </button>
+                      )}{' '}
                       {isMe(a) ? null : off ? (
                         <span className="adm-callout-actions adm-row-buttons">
                           <button type="button" className="link-button" onClick={() => enable([a.email])}>

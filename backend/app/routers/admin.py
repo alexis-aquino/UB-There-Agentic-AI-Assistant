@@ -13,7 +13,7 @@ from app.auth.store import User
 from app.brain.memory import get_memory
 from app.brain.topics import ALL_TOPICS
 from app.config import get_settings
-from app.routers.auth import _in_domain, admin_user, get_store, is_admin
+from app.routers.auth import admin_user, get_store, kind_of
 from app.routers.tickets import get_tickets
 from app.schemas import AccountsRequest, FlagRequest
 from app.tickets.store import Ticket
@@ -121,13 +121,19 @@ def _accounts() -> dict:
     for row in get_store().all_rows():
         questions, last_asked = activity.get(row["id"], (0, None))
         last_active = max(filter(None, [_utc(row["last_active_at"]), last_asked]), default=None)
-        user = User(row["id"], row["email"], row["name"], None, bool(row["google_linked"]), False)
+        user = User(
+            row["id"], row["email"], row["name"], None, bool(row["google_linked"]), False,
+            account_type=row["account_type"],
+        )
         accounts.append(
             {
                 "id": row["id"],
                 "email": row["email"],
                 "name": row["name"],
-                "role": "admin" if is_admin(user) else "student" if _in_domain(row["email"]) else "guest",
+                "role": kind_of(user),
+                "department": row["department"],
+                # University departments wait for an administrator before they see any student.
+                "pending": row["account_type"] == "department" and not row["approved_by"],
                 "signIn": "UB mail" if row["google_linked"] else "Email & password",
                 "createdAt": _utc(row["created_at"]),
                 "lastActiveAt": last_active,
@@ -159,6 +165,13 @@ def disable_accounts(body: AccountsRequest, admin: User = Depends(admin_user)) -
 @router.post("/accounts/enable")
 def enable_accounts(body: AccountsRequest, admin: User = Depends(admin_user)) -> dict:
     get_store().set_disabled(_others(body.ids, admin), None)
+    return _accounts()
+
+
+@router.post("/accounts/approve")
+def approve_accounts(body: AccountsRequest, admin: User = Depends(admin_user)) -> dict:
+    """Approve university department accounts, so they can see their department's students."""
+    get_store().approve(body.ids, admin.name)
     return _accounts()
 
 

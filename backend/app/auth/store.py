@@ -35,6 +35,12 @@ COLUMNS = {
     "last_active_at": "TEXT",  # last sign-in or visit, ISO UTC
     "disabled_by": "TEXT",  # the administrator who disabled the account; NULL = enabled
     "disabled_at": "TEXT",
+    # student | guest | department. NULL on accounts made before account types: those count as
+    # students when they're UB addresses, guests otherwise (app/routers/auth.py, kind_of).
+    "account_type": "TEXT",
+    "department": "TEXT",  # students and university departments
+    "approved_by": "TEXT",  # university departments: the administrator who let them in
+    "approved_at": "TEXT",
 }
 
 
@@ -55,6 +61,9 @@ class User:
     google_linked: bool
     default_password: bool
     disabled: bool = False  # by an administrator: can't sign in
+    account_type: str | None = None
+    department: str | None = None
+    approved: bool = False  # university departments only: an administrator approved the account
 
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> "User":
@@ -66,6 +75,9 @@ class User:
             google_linked=row["google_sub"] is not None,
             default_password=bool(row["default_password"]),
             disabled=row["disabled_by"] is not None,
+            account_type=row["account_type"],
+            department=row["department"],
+            approved=row["approved_by"] is not None,
         )
 
 
@@ -114,13 +126,15 @@ class UserStore:
         password: str | None = None,
         google_sub: str | None = None,
         picture: str | None = None,
+        account_type: str | None = None,
+        department: str | None = None,
     ) -> User:
         password = password or self.default_password
         try:
             with self._lock:
                 cursor = self._connection.execute(
-                    "INSERT INTO users (email, name, password_hash, google_sub, picture, default_password)"
-                    " VALUES (?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO users (email, name, password_hash, google_sub, picture, default_password,"
+                    " account_type, department) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         email.strip(),
                         name.strip(),
@@ -128,6 +142,8 @@ class UserStore:
                         google_sub,
                         picture,
                         int(password == self.default_password),
+                        account_type,
+                        department,
                     ),
                 )
                 self._connection.commit()
@@ -190,7 +206,8 @@ class UserStore:
         with self._lock:
             return self._connection.execute(
                 "SELECT id, email, name, google_sub IS NOT NULL AS google_linked, created_at, "
-                "last_active_at, disabled_by, disabled_at FROM users ORDER BY id"
+                "last_active_at, disabled_by, disabled_at, account_type, department, approved_by, approved_at "
+                "FROM users ORDER BY id"
             ).fetchall()
 
     def set_disabled(self, user_ids: list[int], by: str | None) -> None:
@@ -207,6 +224,16 @@ class UserStore:
                         "UPDATE users SET disabled_by = ?, disabled_at = ? WHERE id = ? AND disabled_by IS NULL",
                         (by, now_iso(), user_id),
                     )
+            self._connection.commit()
+
+    def approve(self, user_ids: list[int], by: str) -> None:
+        """Let university department accounts in. Only accounts signed up as departments."""
+        with self._lock:
+            self._connection.executemany(
+                "UPDATE users SET approved_by = ?, approved_at = ? "
+                "WHERE id = ? AND account_type = 'department' AND approved_by IS NULL",
+                [(by, now_iso(), i) for i in user_ids],
+            )
             self._connection.commit()
 
     def delete(self, user_ids: list[int]) -> None:

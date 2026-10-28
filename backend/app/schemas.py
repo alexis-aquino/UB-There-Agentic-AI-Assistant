@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -31,12 +33,15 @@ EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 
 
 class SignupRequest(BaseModel):
-    """Guest sign-up: any name and email, both required."""
+    """Sign-up with email and password: a student or university department (UB address and a
+    department), or a guest (any email, no department)."""
 
     name: str = Field(min_length=1, max_length=80)
     email: str = Field(pattern=EMAIL_PATTERN, max_length=254)
     # Omitted = the default starting password (settings.default_password).
     password: str | None = Field(default=None, min_length=8, max_length=128)
+    account_type: Literal["student", "guest", "department"] = "guest"
+    department: str | None = Field(default=None, max_length=120)
 
     @field_validator("name", "email", mode="before")
     @classmethod
@@ -70,10 +75,15 @@ class UserOut(BaseModel):
     picture: str | None = None
     google_linked: bool = False
     default_password: bool = False
-    # True for accounts outside the university domain (signed up with email).
+    # True for guest accounts (no department).
     guest: bool = True
     # Can open the admin dashboard (ADMIN_EMAILS in backend/.env).
     admin: bool = False
+    # admin | department | student | guest
+    account_type: str = "guest"
+    department: str | None = None
+    # University departments: an administrator has approved the account.
+    approved: bool = False
 
 
 class AuthResponse(BaseModel):
@@ -86,6 +96,7 @@ class AuthConfig(BaseModel):
     google_client_id: str
     google_domain: str
     default_password: str
+    departments: list[str] = []
 
 
 # ---------- asking an office ----------

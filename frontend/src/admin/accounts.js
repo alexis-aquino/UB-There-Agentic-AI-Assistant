@@ -2,7 +2,8 @@
  * Accounts for the admin's Accounts page, from the backend (/api/admin/accounts, administrators
  * only). Every call returns the whole list again, so the page always shows what's stored:
  *
- *   { accounts: [{ id, email, name, role: 'admin' | 'student' | 'guest',
+ *   { accounts: [{ id, email, name, role: 'admin' | 'department' | 'student' | 'guest',
+ *                  department | null, pending (a department waiting for approval),
  *                  signIn: 'UB mail' | 'Email & password', createdAt, lastActiveAt | null,
  *                  questions, disabled: { by, at } | null }],
  *     deleteAfterDays }
@@ -20,6 +21,7 @@ const act = (action) => (token, ids) => apiFetch(`/api/admin/accounts/${action}`
 export const disableAccounts = act('disable');
 export const enableAccounts = act('enable');
 export const deleteAccounts = act('delete');
+export const approveAccounts = act('approve');
 
 /** Whole days until a disabled account can be deleted; 0 once it can. */
 export function daysUntilDeletable(off, wait, now = new Date()) {

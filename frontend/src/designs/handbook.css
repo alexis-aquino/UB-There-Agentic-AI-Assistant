@@ -1130,6 +1130,71 @@
     font-size: var(--step-0);
   }
 
+  /* Sign-up: which kind of account. */
+  .auth-types {
+    display: grid;
+    gap: var(--space-2);
+    margin: 0 0 var(--space-4);
+    padding: 0;
+    border: 0;
+  }
+
+  .auth-types legend {
+    margin-bottom: var(--space-2);
+    font-size: var(--step--2);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .auth-types label {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    column-gap: var(--space-3);
+    align-items: center;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    background: var(--surface);
+    cursor: pointer;
+  }
+
+  .auth-types label.is-on {
+    border-color: var(--accent);
+    box-shadow: inset 3px 0 0 var(--accent);
+  }
+
+  .auth-types input {
+    grid-row: span 2;
+    accent-color: var(--accent);
+  }
+
+  .auth-types strong {
+    font-size: var(--step--1);
+    color: var(--ink);
+  }
+
+  .auth-types span {
+    font-size: var(--step--2);
+    color: var(--muted);
+  }
+
+  .auth-field select {
+    width: 100%;
+    padding: var(--space-2) 0;
+    border: 0;
+    border-bottom: 1px solid var(--rule-strong);
+    background: transparent;
+    color: var(--ink);
+    font-family: var(--font-display);
+    font-size: var(--step-1);
+  }
+
+  .auth-side-door .auth-switch {
+    margin: var(--space-3) 0 0;
+  }
+
   .auth-back {
     display: inline-block;
     margin-bottom: var(--space-5);

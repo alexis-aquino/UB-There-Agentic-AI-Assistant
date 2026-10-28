@@ -51,6 +51,7 @@ export default function useAuth() {
     google_client_id: '',
     google_domain: 'ub.edu.ph',
     default_password: '12345678',
+    departments: [],
   });
 
   useEffect(() => {
@@ -89,9 +90,12 @@ export default function useAuth() {
     [startSession]
   );
 
+  // accountType: 'student' | 'guest' | 'department'; students and departments pick a department.
   const signup = useCallback(
-    (name, email, password) =>
-      request('/signup', { body: { name, email, password } }).then(startSession),
+    (name, email, password, accountType = 'guest', department = null) =>
+      request('/signup', {
+        body: { name, email, password, account_type: accountType, department },
+      }).then(startSession),
     [startSession]
   );
 

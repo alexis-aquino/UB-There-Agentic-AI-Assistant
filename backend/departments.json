@@ -1,0 +1,12 @@
+{
+  "_note": "PLACEHOLDERS — replace with the University of Batangas' real departments. Students and university departments pick one when they sign up; a department sees only its own students.",
+  "departments": [
+    "College of Engineering",
+    "College of Information Technology",
+    "College of Business and Accountancy",
+    "College of Education",
+    "College of Nursing",
+    "College of Arts and Sciences",
+    "College of Criminal Justice Education"
+  ]
+}
