@@ -1,7 +1,9 @@
-"""The admin dashboard's data: every question students asked and where each one stands, and
-every account, with disabling and deleting.
+"""The dashboard's data: every question students asked and where each one stands, and every
+account, with disabling and deleting.
 
-Only administrators (ADMIN_EMAILS in backend/.env, UB addresses only) can read it.
+Administrators (ADMIN_EMAILS in backend/.env, UB addresses only) see everything and manage
+accounts. An approved university department sees only its own students and their questions, and
+can't change accounts.
 """
 
 import sqlite3
@@ -13,7 +15,7 @@ from app.auth.store import User
 from app.brain.memory import get_memory
 from app.brain.topics import ALL_TOPICS
 from app.config import get_settings
-from app.routers.auth import admin_user, get_store, kind_of
+from app.routers.auth import admin_user, get_store, is_admin, kind_of, staff_user
 from app.routers.tickets import get_tickets
 from app.schemas import AccountsRequest, FlagRequest
 from app.tickets.store import Ticket
@@ -37,9 +39,12 @@ def _record(row: sqlite3.Row, ticket: Ticket | None, students: dict[int, User | 
     """One inquiry, in the shape the dashboard reads (frontend/src/admin/report.js)."""
     student = students.get(row["user_id"]) if row["user_id"] is not None else None
     if student:
-        asker = {"name": student.name, "email": student.email}
+        asker = {"name": student.name, "email": student.email, "department": student.department}
     elif row["asker_name"]:
-        asker = {"name": row["asker_name"], "email": row["asker_email"], "deleted": True}
+        asker = {
+            "name": row["asker_name"], "email": row["asker_email"], "department": row["asker_department"],
+            "deleted": True,
+        }
     else:
         asker = None  # asked without signing in
     return {
@@ -74,22 +79,42 @@ def _students(rows: list[sqlite3.Row]) -> dict[int, User | None]:
     return {user_id: get_store().get(user_id) for user_id in ids}
 
 
+def _scope(staff: User) -> str | None:
+    """The department a staff account is limited to; None for administrators (everything)."""
+    return None if is_admin(staff) else staff.department
+
+
+def _department_of(row: sqlite3.Row, students: dict[int, User | None]) -> str | None:
+    student = students.get(row["user_id"]) if row["user_id"] is not None else None
+    if student:
+        # Only students belong to a department; guests and staff never show on a department's report.
+        return student.department if kind_of(student) == "student" else None
+    return row["asker_department"]
+
+
 @router.get("/inquiries")
-def inquiries(_: User = Depends(admin_user)) -> dict:
+def inquiries(staff: User = Depends(staff_user)) -> dict:
     rows = get_memory().inquiries()
-    tickets = get_tickets().by_inquiry()
     students = _students(rows)
+    department = _scope(staff)
+    if department:
+        rows = [row for row in rows if _department_of(row, students) == department]
+    tickets = get_tickets().by_inquiry()
     return {
         "topics": ALL_TOPICS,
+        "department": department,
         "inquiries": [_record(row, tickets.get(row["id"]), students) for row in rows],
     }
 
 
 @router.put("/inquiries/{inquiry_id}/flag")
-def flag(inquiry_id: int, body: FlagRequest, admin: User = Depends(admin_user)) -> dict:
-    """Mark a question offensive or off-topic (or clear the mark). Flagged ones stay out of the top questions."""
+def flag(inquiry_id: int, body: FlagRequest, admin: User = Depends(staff_user)) -> dict:
+    """Mark a question offensive or off-topic (or clear the mark). Flagged ones stay out of the top
+    questions. A department can only flag its own students' questions."""
     memory = get_memory()
-    if memory.inquiry(inquiry_id) is None:
+    found = memory.inquiry(inquiry_id)
+    department = _scope(admin)
+    if found is None or (department and _department_of(found, _students([found])) != department):
         raise HTTPException(status_code=404, detail="That question isn't in the log.")
     if body.flagged:
         at = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
@@ -114,8 +139,9 @@ def _days_since(iso: str) -> float:
     return (datetime.now(timezone.utc) - datetime.fromisoformat(iso.replace("Z", "+00:00"))).total_seconds() / 86400
 
 
-def _accounts() -> dict:
-    """Every account, in the shape the Accounts page reads (frontend/src/admin/accounts.js)."""
+def _accounts(department: str | None = None) -> dict:
+    """Every account, in the shape the Accounts page reads (frontend/src/admin/accounts.js).
+    With `department`, only that department's students (a university department's view)."""
     activity = get_memory().activity_by_user()
     accounts = []
     for row in get_store().all_rows():
@@ -125,6 +151,8 @@ def _accounts() -> dict:
             row["id"], row["email"], row["name"], None, bool(row["google_linked"]), False,
             account_type=row["account_type"],
         )
+        if department and (kind_of(user) != "student" or row["department"] != department):
+            continue
         accounts.append(
             {
                 "id": row["id"],
@@ -151,8 +179,10 @@ def _others(ids: list[int], admin: User) -> list[int]:
 
 
 @router.get("/accounts")
-def accounts(_: User = Depends(admin_user)) -> dict:
-    return _accounts()
+def accounts(staff: User = Depends(staff_user)) -> dict:
+    """Administrators: every account. A department: its own students, to view only (the
+    disable, enable, approve and delete actions below are for administrators)."""
+    return _accounts(_scope(staff))
 
 
 @router.post("/accounts/disable")
@@ -199,6 +229,6 @@ def delete_accounts(body: AccountsRequest, admin: User = Depends(admin_user)) ->
             row["id"] for row in memory.for_users(ready) if _status(row, tickets.get(row["id"])) in ("rerouted", "pending")
         ]
         memory.close(still_open, datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"))
-    memory.keep_asker({i: (rows[i]["name"], rows[i]["email"]) for i in ready})
+    memory.keep_asker({i: (rows[i]["name"], rows[i]["email"], rows[i]["department"]) for i in ready})
     get_store().delete(ready)
     return _accounts()

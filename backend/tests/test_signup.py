@@ -3,12 +3,13 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 
+from app.auth.departments import load_departments
 from app.config import get_settings
 from app.main import app
 from tests.test_admin import ADMIN
 
 client = TestClient(app)
-DEPT = "College of Information Technology"
+DEPT = load_departments()[0]  # whatever backend/departments.json lists first
 
 
 @pytest.fixture

@@ -53,7 +53,7 @@ class Memory:
         # Added later: who asked, saved onto the question when their account is deleted, and when
         # the question was closed because of that deletion.
         columns = {row["name"] for row in self._connection.execute("PRAGMA table_info(inquiries)")}
-        for column in ("asker_name", "asker_email", "closed_at"):
+        for column in ("asker_name", "asker_email", "asker_department", "closed_at"):
             if column not in columns:
                 self._connection.execute(f"ALTER TABLE inquiries ADD COLUMN {column} TEXT")
         self._connection.commit()
@@ -141,13 +141,15 @@ class Memory:
             )
             self._connection.commit()
 
-    def keep_asker(self, askers: dict[int, tuple[str, str]]) -> None:
-        """Before accounts are deleted: save each one's name and email onto its questions, so the
-        report still shows who asked. `askers` is {user_id: (name, email)}."""
+    def keep_asker(self, askers: dict[int, tuple[str, str, str | None]]) -> None:
+        """Before accounts are deleted: save each one's name, email and department onto its
+        questions, so the report (and their department) still shows who asked.
+        `askers` is {user_id: (name, email, department)}."""
         with self._lock:
             self._connection.executemany(
-                "UPDATE inquiries SET asker_name = ?, asker_email = ?, user_id = NULL WHERE user_id = ?",
-                [(name, email, user_id) for user_id, (name, email) in askers.items()],
+                "UPDATE inquiries SET asker_name = ?, asker_email = ?, asker_department = ?, user_id = NULL "
+                "WHERE user_id = ?",
+                [(name, email, department, user_id) for user_id, (name, email, department) in askers.items()],
             )
             self._connection.commit()
 

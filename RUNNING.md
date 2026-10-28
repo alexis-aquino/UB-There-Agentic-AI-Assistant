@@ -158,7 +158,10 @@ addresses must use **Sign in with UB Mail** and the form is for guests only.
 
 ## Admin dashboard
 
-Administrators see **Admin dashboard** in the menu (`#admin`). Who counts is set in `backend\.env`,
+Administrators and approved university departments go straight to the dashboard when they sign in;
+they never get the chat. A department's dashboard shows only its own students and their questions
+(guests and other departments are hidden), its **Students** tab is view-only, and it has no
+Knowledge base. Who counts as an administrator is set in `backend\.env`,
 then restart the backend:
 
 ```

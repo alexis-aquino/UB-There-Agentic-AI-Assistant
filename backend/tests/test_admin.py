@@ -57,7 +57,7 @@ def test_inquiries_report_who_asked_and_the_status():
     by_id = {r["id"]: r for r in body["inquiries"]}
     assert by_id[answered]["status"] == "answered"
     assert by_id[answered]["topic"] == "Enrollment"
-    assert by_id[answered]["student"] == {"name": user.name, "email": user.email}
+    assert by_id[answered]["student"] == {"name": user.name, "email": user.email, "department": None}
     assert by_id[rerouted]["status"] == "rerouted"
     assert by_id[rerouted]["student"] is None
     assert by_id[rerouted]["ticket"] is None
@@ -188,7 +188,7 @@ def test_delete_waits_until_disabled_long_enough_and_keeps_the_history():
     assert client.post("/api/admin/accounts/delete", json={"ids": [user.id]}, headers=ADMIN).status_code == 200
     assert user.email not in accounts()
     record = next(r for r in client.get("/api/admin/inquiries", headers=ADMIN).json()["inquiries"] if r["id"] == inquiry)
-    assert record["student"] == {"name": user.name, "email": user.email, "deleted": True}
+    assert record["student"] == {"name": user.name, "email": user.email, "department": None, "deleted": True}
 
     report = {r["id"]: r for r in client.get("/api/admin/inquiries", headers=ADMIN).json()["inquiries"]}
     # Settled questions keep their state; open ones are closed, with their tickets kept.

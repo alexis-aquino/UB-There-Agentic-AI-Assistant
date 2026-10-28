@@ -68,6 +68,22 @@ class ChangePasswordRequest(BaseModel):
     new_password: str = Field(min_length=8, max_length=128)
 
 
+class ProfileRequest(BaseModel):
+    """What anyone may change about their own account. Not the department: that decides what a
+    university department can see, so only an administrator sets it."""
+
+    name: str = Field(min_length=1, max_length=80)
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def strip_name(cls, value: object) -> object:
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                raise ValueError("Please enter your name.")
+        return value
+
+
 class UserOut(BaseModel):
     id: int
     email: str

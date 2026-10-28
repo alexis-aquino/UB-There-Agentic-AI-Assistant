@@ -1,6 +1,14 @@
 import { useState } from 'react';
 
-export default function AccountPanel({ user, defaultPassword, onChangePassword, onClose }) {
+const KINDS = { admin: 'Administrator', department: 'University department', student: 'Student', guest: 'Guest' };
+
+/** Your own account: your name and password. Everyone has it — students and guests in the chat,
+ * administrators and university departments in the dashboard. */
+export default function AccountPanel({ user, defaultPassword, onChangePassword, onRename, onClose }) {
+  const [name, setName] = useState(user.name);
+  const [nameBusy, setNameBusy] = useState(false);
+  const [nameError, setNameError] = useState(null);
+  const [nameDone, setNameDone] = useState(false);
   const [current, setCurrent] = useState(user.default_password ? defaultPassword : '');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -28,6 +36,21 @@ export default function AccountPanel({ user, defaultPassword, onChangePassword, 
     }
   };
 
+  const saveName = async (e) => {
+    e.preventDefault();
+    setNameBusy(true);
+    setNameError(null);
+    setNameDone(false);
+    try {
+      await onRename(name.trim());
+      setNameDone(true);
+    } catch (err) {
+      setNameError(err.message);
+    } finally {
+      setNameBusy(false);
+    }
+  };
+
   return (
     <section className="voice-panel" aria-label="Account">
       <div className="voice-panel-head">
@@ -46,9 +69,47 @@ export default function AccountPanel({ user, defaultPassword, onChangePassword, 
         </div>
         <div>
           <dt>Account type</dt>
-          <dd>{user.guest ? 'Guest' : 'UB student / staff'}</dd>
+          <dd>{KINDS[user.account_type] ?? (user.guest ? 'Guest' : 'UB student / staff')}</dd>
         </div>
+        {user.department && (
+          <div>
+            <dt>Department</dt>
+            <dd>
+              {user.department}
+              {user.account_type === 'department' && ' · only an administrator can change it'}
+            </dd>
+          </div>
+        )}
       </dl>
+
+      {onRename && (
+        <form className="account-form" onSubmit={saveName}>
+          <h3>Your name</h3>
+          <label className="auth-field">
+            <span>{user.account_type === 'department' ? 'Name or office' : 'Full name'}</span>
+            <input
+              type="text"
+              autoComplete="name"
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                setNameDone(false);
+              }}
+              maxLength={80}
+              required
+            />
+          </label>
+          {nameError && (
+            <p className="auth-error" role="alert">
+              {nameError}
+            </p>
+          )}
+          {nameDone && <p className="account-success">Name updated.</p>}
+          <button type="submit" className="button-primary" disabled={nameBusy || !name.trim() || name.trim() === user.name}>
+            {nameBusy ? 'Saving…' : 'Update name'}
+          </button>
+        </form>
+      )}
 
       <form className="account-form" onSubmit={handleSubmit}>
         <h3>Change password</h3>

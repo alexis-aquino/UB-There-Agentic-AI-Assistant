@@ -255,6 +255,7 @@ export default function ChatBot({ auth, theme, onOpenAdmin }) {
           user={user}
           defaultPassword={config.default_password}
           onChangePassword={changePassword}
+          onRename={auth.updateName}
           onClose={() => setShowAccount(false)}
         />
       )}

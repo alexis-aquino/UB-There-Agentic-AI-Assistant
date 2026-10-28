@@ -181,6 +181,11 @@ class UserStore:
 
         return self.create(email, name, google_sub=google_sub, picture=picture), True
 
+    def rename(self, user_id: int, name: str) -> None:
+        with self._lock:
+            self._connection.execute("UPDATE users SET name = ? WHERE id = ?", (name.strip(), user_id))
+            self._connection.commit()
+
     def change_password(self, user_id: int, current: str, new: str) -> bool:
         row = self._one("SELECT * FROM users WHERE id = ?", (user_id,))
         if not row or not verify_password(current, row["password_hash"]):

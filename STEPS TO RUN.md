@@ -19,7 +19,7 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r ..\requirements.txt
 copy .env.example .env
 .\.venv\Scripts\python.exe ingest.py
-.\.venv\Scripts\python.exe -c "from app.config import get_settings as g; from app.auth.store import UserStore; s = UserStore(g().users_db, g().default_password); D = 'College of Information Technology'; s.create('admin@ub.edu.ph', 'UB Admin'); s.create('student@ub.edu.ph', 'UB Student', account_type='student', department=D); s.create('guest@ub.edu.ph', 'UB Guest', account_type='guest'); d = s.create('department@ub.edu.ph', 'UB Department', account_type='department', department=D); s.approve([d.id], 'Test setup')"
+.\.venv\Scripts\python.exe -c "from app.config import get_settings as g; from app.auth.store import UserStore; s = UserStore(g().users_db, g().default_password); D = 'College of Information and Communications Technology'; s.create('admin@ub.edu.ph', 'UB Admin'); s.create('student@ub.edu.ph', 'UB Student', account_type='student', department=D); s.create('guest@ub.edu.ph', 'UB Guest', account_type='guest'); d = s.create('department@ub.edu.ph', 'UB Department', account_type='department', department=D); s.approve([d.id], 'Test setup')"
 ```
 
 ```
@@ -57,4 +57,4 @@ Open **http://localhost:5273** → **Login** → sign in with a test account bel
 
 Every new account (guest or UB Mail) also starts with the password **12345678**.
 
-The student and department test accounts belong to the College of Information Technology; the department account is already approved. New accounts can also be made with **Sign up** (Student, Guest or University department). A new department account waits until an admin clicks **Approve** in the dashboard's Accounts tab.
+The student and department test accounts belong to the College of Information and Communications Technology; the department account is already approved, so it opens the department dashboard. New accounts can also be made with **Sign up** (Student, Guest or University department). A new department account waits until an admin clicks **Approve** in the dashboard's Accounts tab.

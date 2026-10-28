@@ -113,6 +113,11 @@ export default function useAuth() {
     [token]
   );
 
+  const updateName = useCallback(
+    (name) => request('/profile', { token, body: { name } }).then(setUser),
+    [token]
+  );
+
   const logout = useCallback(() => {
     writeToken(null);
     setToken(null);
@@ -121,5 +126,5 @@ export default function useAuth() {
     window.google?.accounts?.id?.disableAutoSelect();
   }, []);
 
-  return { status, user, token, config, login, signup, loginWithGoogle, changePassword, logout };
+  return { status, user, token, config, login, signup, loginWithGoogle, changePassword, updateName, logout };
 }

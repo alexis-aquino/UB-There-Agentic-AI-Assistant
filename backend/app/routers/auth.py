@@ -14,6 +14,7 @@ from app.schemas import (
     ChangePasswordRequest,
     GoogleLoginRequest,
     LoginRequest,
+    ProfileRequest,
     SignupRequest,
     UserOut,
 )
@@ -89,6 +90,13 @@ def admin_user(user: User = Depends(current_user)) -> User:
     return user
 
 
+def staff_user(user: User = Depends(current_user)) -> User:
+    """An administrator, or an approved university department (which sees only its own students)."""
+    if is_admin(user) or (kind_of(user) == "department" and user.approved and user.department):
+        return user
+    raise HTTPException(status_code=403, detail="Only administrators and university departments can see this.")
+
+
 @router.get("/config", response_model=AuthConfig)
 def config() -> AuthConfig:
     settings = get_settings()
@@ -162,6 +170,13 @@ def google(body: GoogleLoginRequest) -> AuthResponse:
 def me(user: User = Depends(current_user)) -> UserOut:
     get_store().touch(user.id)  # each time the app is opened
     return _user_out(user)
+
+
+@router.post("/profile", response_model=UserOut)
+def update_profile(body: ProfileRequest, user: User = Depends(current_user)) -> UserOut:
+    """Change your own name. Every kind of account can, staff included."""
+    get_store().rename(user.id, body.name)
+    return _user_out(get_store().get(user.id))
 
 
 @router.post("/password", response_model=UserOut)

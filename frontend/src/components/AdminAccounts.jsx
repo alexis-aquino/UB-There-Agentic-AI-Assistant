@@ -17,7 +17,8 @@ const ROLE_TAGS = { admin: 'Admin', guest: 'Guest', department: 'Department' };
 
 /** Every account, how recently it was used, disabling the ones nobody uses, and deleting those
  * that have stayed disabled for a month. All of it is stored by the backend. */
-export default function AdminAccounts({ user, token }) {
+// readOnly: a university department's view of its own students, with no account actions.
+export default function AdminAccounts({ user, token, readOnly = false }) {
   const [accounts, setAccounts] = useState(null);
   const [wait, setWait] = useState(30); // days disabled before an account can be deleted
   const [loadError, setLoadError] = useState(null);
@@ -103,12 +104,19 @@ export default function AdminAccounts({ user, token }) {
     <section className="adm-section adm-page" aria-labelledby="adm-accounts-title">
       <div className="adm-tracker-head">
         <div>
-          <h3 id="adm-accounts-title">Accounts</h3>
-          <p className="adm-sub">
-            Everyone with a UB There account and when they last used it. An account is “Not used” after 2 months without
-            use. Disabling keeps the account and its history, and it can be enabled again. An account that has been
-            disabled for {wait} days can be deleted for good.
-          </p>
+          <h3 id="adm-accounts-title">{readOnly ? 'Students' : 'Accounts'}</h3>
+          {readOnly ? (
+            <p className="adm-sub">
+              The students in your department and when they last used UB There. An account is “Not used” after 2 months
+              without use. Only administrators can disable or delete accounts.
+            </p>
+          ) : (
+            <p className="adm-sub">
+              Everyone with a UB There account and when they last used it. An account is “Not used” after 2 months
+              without use. Disabling keeps the account and its history, and it can be enabled again. An account that
+              has been disabled for {wait} days can be deleted for good.
+            </p>
+          )}
         </div>
       </div>
 
@@ -140,7 +148,7 @@ export default function AdminAccounts({ user, token }) {
         </p>
       )}
 
-      {deletable.length > 0 && !confirm && (
+      {!readOnly && deletable.length > 0 && !confirm && (
         <div className="adm-callout is-danger">
           <p>
             <strong>{deletable.length}</strong> {deletable.length === 1 ? 'account has' : 'accounts have'} been disabled
@@ -162,7 +170,7 @@ export default function AdminAccounts({ user, token }) {
         </div>
       )}
 
-      {unused.length > 0 && !confirm && (
+      {!readOnly && unused.length > 0 && !confirm && (
         <div className="adm-callout">
           <p>
             <strong>{unused.length}</strong> {unused.length === 1 ? 'account hasn’t' : 'accounts haven’t'} been used in
@@ -235,7 +243,7 @@ export default function AdminAccounts({ user, token }) {
             placeholder="Search names or emails…"
             aria-label="Search names or emails"
           />
-          {picked.length > 0 && (
+          {!readOnly && picked.length > 0 && (
             <>
               <button
                 type="button"
@@ -284,23 +292,27 @@ export default function AdminAccounts({ user, token }) {
           <table className="adm-log adm-accounts">
             <thead>
               <tr>
-                <th scope="col" className="adm-check-col">
-                  <input
-                    type="checkbox"
-                    checked={allPicked}
-                    onChange={() => setSelected(allPicked ? new Set() : new Set(selectable.map((a) => a.email)))}
-                    aria-label="Select all shown"
-                  />
-                </th>
+                {!readOnly && (
+                  <th scope="col" className="adm-check-col">
+                    <input
+                      type="checkbox"
+                      checked={allPicked}
+                      onChange={() => setSelected(allPicked ? new Set() : new Set(selectable.map((a) => a.email)))}
+                      aria-label="Select all shown"
+                    />
+                  </th>
+                )}
                 <th scope="col">Account</th>
                 <th scope="col">Sign-in</th>
                 <th scope="col">Joined</th>
                 <th scope="col">Last used</th>
                 <th scope="col">Questions</th>
                 <th scope="col">Status</th>
-                <th scope="col">
-                  <span className="sr-only">Action</span>
-                </th>
+                {!readOnly && (
+                  <th scope="col">
+                    <span className="sr-only">Action</span>
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -309,6 +321,7 @@ export default function AdminAccounts({ user, token }) {
                 const off = a.disabled;
                 return (
                   <tr key={a.email} className={state === 'disabled' ? 'is-disabled' : ''}>
+                    {!readOnly && (
                     <td className="adm-check-col">
                       {!isMe(a) && (
                         <input
@@ -319,6 +332,7 @@ export default function AdminAccounts({ user, token }) {
                         />
                       )}
                     </td>
+                    )}
                     <td>
                       <span className="adm-account-name">
                         {a.name}
@@ -345,6 +359,7 @@ export default function AdminAccounts({ user, token }) {
                         </span>
                       )}
                     </td>
+                    {!readOnly && (
                     <td className="adm-row-action">
                       {a.pending && !off && (
                         <button type="button" className="link-button" disabled={busy} onClick={() => approve([a.email])}>
@@ -376,6 +391,7 @@ export default function AdminAccounts({ user, token }) {
                         </button>
                       )}
                     </td>
+                    )}
                   </tr>
                 );
               })}

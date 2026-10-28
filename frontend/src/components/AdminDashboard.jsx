@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import { STATES, buildReport, filterRecords, monthOf, stateOf } from '../admin/report.js';
 import { flagInquiry as saveFlag, loadQueryLog } from '../admin/queryLog.js';
 import { monthName, periodName, readYears, yearMonths } from '../admin/months.js';
+import AccountPanel from './AccountPanel.jsx';
 import AdminAccounts from './AdminAccounts.jsx';
 import AdminKnowledge from './AdminKnowledge.jsx';
 import MonthPicker from './MonthPicker.jsx';
@@ -18,6 +19,13 @@ const VIEWS = [
 ];
 // The dashboard's parts. The report keeps its own tabs (#admin/questions …); the others are
 // #admin/accounts and #admin/knowledge.
+// A university department's dashboard: its students' questions, its students (view-only), and the
+// knowledge base, where it adds content like an administrator.
+const DEPARTMENT_SECTIONS = [
+  ['report', 'Inquiry report'],
+  ['accounts', 'Students'],
+  ['knowledge', 'Knowledge base'],
+];
 const SECTIONS = [
   ['report', 'Inquiry report'],
   ['accounts', 'Accounts'],
@@ -399,7 +407,12 @@ function TrendGrid({ report }) {
 }
 
 /** The administrator's view of the query log: monthly trends and where every inquiry stands. */
-export default function AdminDashboard({ user, token, theme, onBack }) {
+export default function AdminDashboard({ user, token, theme, defaultPassword, onChangePassword, onRename, onSignOut }) {
+  const [showAccount, setShowAccount] = useState(false);
+  // An approved university department gets this same dashboard, limited by the backend to its own
+  // students; it can't manage accounts or the knowledge base.
+  const department = user.admin ? null : user.department;
+  const sections = department ? DEPARTMENT_SECTIONS : SECTIONS;
   const [records, setRecords] = useState(null); // the query log, newest first
   const [topics, setTopics] = useState([]);
   const [loadError, setLoadError] = useState(null);
@@ -425,6 +438,7 @@ export default function AdminDashboard({ user, token, theme, onBack }) {
 
   const [view, setView] = useState(viewFromHash);
   const [section, setSection] = useState(sectionFromHash);
+  const current = sections.some(([key]) => key === section) ? section : 'report';
   useEffect(() => {
     const onHash = () => {
       setView(viewFromHash());
@@ -514,23 +528,53 @@ export default function AdminDashboard({ user, token, theme, onBack }) {
           </span>
           <div>
             <h1>UB There</h1>
-            <p className="label">Administrator · {user.name}</p>
+            <p className="label">
+              {department ? `University department · ${department}` : `Administrator · ${user.name}`}
+            </p>
           </div>
         </div>
         <div className="adm-head-actions">
           <ThemeToggle theme={theme.theme} onToggle={theme.toggle} />
-          <button type="button" className="chip-button" onClick={onBack}>
-            Back to chat
+          <button
+            type="button"
+            className="chip-button"
+            aria-expanded={showAccount}
+            onClick={() => setShowAccount(!showAccount)}
+          >
+            My account
+          </button>
+          <button type="button" className="chip-button" onClick={onSignOut}>
+            Sign out
           </button>
         </div>
       </header>
 
+      {showAccount && (
+        <AccountPanel
+          user={user}
+          defaultPassword={defaultPassword}
+          onChangePassword={onChangePassword}
+          onRename={onRename}
+          onClose={() => setShowAccount(false)}
+        />
+      )}
+
+      {user.default_password && !showAccount && (
+        <div className="notice" role="status">
+          <span className="label">Notice</span>
+          <span>You are still using the starting password. Change it to keep your account yours.</span>
+          <button type="button" className="link-button" onClick={() => setShowAccount(true)}>
+            Change password
+          </button>
+        </div>
+      )}
+
       <nav className="adm-sections" aria-label="Dashboard">
-        {SECTIONS.map(([key, label]) => (
+        {sections.map(([key, label]) => (
           <button
             key={key}
             type="button"
-            aria-current={section === key ? 'page' : undefined}
+            aria-current={current === key ? 'page' : undefined}
             onClick={() => openSection(key)}
           >
             {label}
@@ -538,23 +582,33 @@ export default function AdminDashboard({ user, token, theme, onBack }) {
         ))}
       </nav>
 
-      {section === 'knowledge' && (
+      {current === 'knowledge' && (
         <div className="notice" role="status">
           <span className="label">Sample data</span>
           <span>Changes here are saved only in this browser. The assistant uses them once the backend can index them.</span>
         </div>
       )}
 
-      {section === 'accounts' && <AdminAccounts user={user} token={token} />}
+      {department && (
+        <div className="notice" role="status">
+          <span className="label">Your department</span>
+          <span>
+            You see only the questions and accounts of students in the {department}. Guests and other departments
+            are hidden, and accounts are view-only. You can add to the knowledge base like an administrator.
+          </span>
+        </div>
+      )}
 
-      {section === 'knowledge' && <AdminKnowledge user={user} />}
+      {current === 'accounts' && <AdminAccounts user={user} token={token} readOnly={Boolean(department)} />}
 
-      {section === 'report' && !records && (
+      {current === 'knowledge' && <AdminKnowledge user={user} />}
+
+      {current === 'report' && !records && (
         <p className="voice-hint">{loadError ? `Couldn't load the query log: ${loadError}` : 'Loading the query log…'}</p>
       )}
-      {section === 'report' && flagError && <p className="voice-hint">Couldn't save the flag: {flagError}</p>}
+      {current === 'report' && flagError && <p className="voice-hint">Couldn't save the flag: {flagError}</p>}
 
-      {section === 'report' && records && (
+      {current === 'report' && records && (
         <>
           <section className="adm-cover">
             <div>
