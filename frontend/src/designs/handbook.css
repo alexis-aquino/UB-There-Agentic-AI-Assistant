@@ -1495,11 +1495,54 @@
     line-height: 1.6;
   }
 
+  /* Dropdowns (the department at sign-up, the office to ask): a boxed field with its own caret,
+     so it reads as something to pick, not a line of text. */
+  .auth-field select {
+    appearance: none;
+    min-height: 44px;
+    padding: var(--space-2) calc(var(--space-3) * 2 + 12px) var(--space-2) var(--space-3);
+    border: 1px solid var(--rule-strong);
+    border-radius: var(--radius);
+    background-color: var(--surface);
+    background-image:
+      linear-gradient(45deg, transparent 50%, var(--accent) 50%),
+      linear-gradient(135deg, var(--accent) 50%, transparent 50%);
+    background-position:
+      right calc(var(--space-3) + 6px) center,
+      right var(--space-3) center;
+    background-size: 6px 6px;
+    background-repeat: no-repeat;
+    line-height: 1.4;
+    text-overflow: ellipsis;
+    cursor: pointer;
+  }
+
+  .auth-field select:hover {
+    border-color: var(--accent);
+  }
+
+  .auth-field select:invalid {
+    color: var(--muted); /* "Choose your department…" until one is picked */
+  }
+
+  /* The open list: some browsers draw it white whatever the page's theme. */
+  .auth-field select option,
+  .adm-filter-row select option,
+  .adm-form select option {
+    background: var(--surface);
+    color: var(--ink);
+  }
+
   .auth-field select:focus,
   .auth-field textarea:focus {
     outline: none;
     border-bottom-color: var(--accent);
     box-shadow: 0 1px 0 var(--accent);
+  }
+
+  .auth-field select:focus-visible {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
   }
 
   .ask-office-open {
