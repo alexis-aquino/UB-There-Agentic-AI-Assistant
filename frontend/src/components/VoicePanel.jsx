@@ -9,9 +9,11 @@ export default function VoicePanel({ catalog, selected, onSelect, onPreview, pre
     <section className="voice-panel" aria-label="Voice settings">
       <div className="voice-panel-head">
         <h2>Voice</h2>
-        <button type="button" className="link-button" onClick={onClose}>
-          Close
-        </button>
+        {onClose && (
+          <button type="button" className="link-button" onClick={onClose}>
+            Close
+          </button>
+        )}
       </div>
 
       {!catalog && <p className="voice-hint">Loading voices…</p>}

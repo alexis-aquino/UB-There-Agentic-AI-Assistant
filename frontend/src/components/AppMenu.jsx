@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 /**
  * Every setting behind one "Menu" button, so the header stays clean: voice on/off, voice
  * settings, my questions, account, the admin dashboard (admins only), light/dark mode and sign out. Toggles keep the menu open
- * so you can see the change; the rest open their panel and close it.
+ * so you can see the change; the rest open their panel and close it. Items without a handler are left out,
+ * so the dashboard's menu shows only account, dark mode and sign out.
  */
 export default function AppMenu({
   userName,
@@ -61,17 +62,23 @@ export default function AppMenu({
           <p className="app-menu-user">
             Signed in as <strong>{userName}</strong>
           </p>
-          <button type="button" role="menuitemcheckbox" aria-checked={voiceOn} onClick={onToggleVoice}>
-            <span className={`voice-led ${voiceOn ? 'is-on' : ''}`} aria-hidden="true" />
-            Voice
-            <span className="app-menu-state">{voiceOn ? 'On' : 'Off'}</span>
-          </button>
-          <button type="button" role="menuitem" onClick={thenClose(onVoiceSettings)}>
-            Voice settings
-          </button>
-          <button type="button" role="menuitem" onClick={thenClose(onMyQuestions)}>
-            My questions
-          </button>
+          {onToggleVoice && (
+            <button type="button" role="menuitemcheckbox" aria-checked={voiceOn} onClick={onToggleVoice}>
+              <span className={`voice-led ${voiceOn ? 'is-on' : ''}`} aria-hidden="true" />
+              Voice
+              <span className="app-menu-state">{voiceOn ? 'On' : 'Off'}</span>
+            </button>
+          )}
+          {onVoiceSettings && (
+            <button type="button" role="menuitem" onClick={thenClose(onVoiceSettings)}>
+              Voice settings
+            </button>
+          )}
+          {onMyQuestions && (
+            <button type="button" role="menuitem" onClick={thenClose(onMyQuestions)}>
+              My questions
+            </button>
+          )}
           <button type="button" role="menuitem" onClick={thenClose(onAccount)}>
             Account
           </button>

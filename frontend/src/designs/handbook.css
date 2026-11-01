@@ -117,8 +117,14 @@
 
   /* ---------- masthead ---------- */
 
+  /* Pinned to the top of the window. It carries the page's own paper so nothing scrolling
+     underneath shows through; the shadow paints that paper behind the thin rule below it. */
   .masthead {
-    position: relative;
+    position: sticky;
+    top: 0;
+    background-color: var(--bg);
+    background-image: var(--grain);
+    box-shadow: 0 8px 0 var(--bg);
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
@@ -258,6 +264,33 @@
     animation: rise 450ms var(--ease-out) both;
   }
 
+  /* A menu item's own page (account, my questions, voice), in place of the chat. */
+  .menu-page {
+    width: 100%;
+    max-width: 760px;
+    margin-inline: auto;
+    padding-bottom: var(--space-7);
+    animation: rise 450ms var(--ease-out) both;
+  }
+
+  .menu-page-back {
+    display: inline-block;
+    margin-bottom: var(--space-4);
+    text-decoration: none;
+  }
+
+  .menu-page-back:hover {
+    text-decoration: underline;
+  }
+
+  .menu-page .voice-panel {
+    margin-bottom: 0;
+  }
+
+  .desk[hidden] {
+    display: none;
+  }
+
   .voice-panel-head {
     display: flex;
     justify-content: space-between;
@@ -316,7 +349,7 @@
 
   .index {
     position: sticky;
-    top: var(--space-5);
+    top: calc(var(--masthead-h, 0px) + var(--space-5));
     padding-top: var(--space-2);
     animation: rise 700ms 120ms var(--ease-out) both;
   }
@@ -1120,14 +1153,28 @@
   }
 
   .auth-side-door {
-    margin-top: var(--space-6);
-    padding-top: var(--space-4);
+    margin-top: 10px;
+    padding-top: 20px;
     border-top: 1px solid var(--rule);
     text-align: center;
   }
 
   .auth-side-door .link-button {
     font-size: var(--step-0);
+  }
+
+  /* Login (email): the primary stamped button, full width with the envelope beside its label. */
+  .login-button {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-3);
+    padding: var(--space-4);
+  }
+
+  .login-button svg {
+    flex: none;
   }
 
   /* Sign-up: which kind of account. */
@@ -1804,7 +1851,7 @@
 
   .avatar-stage {
     position: sticky;
-    top: var(--space-4);
+    top: calc(var(--masthead-h, 0px) + var(--space-4));
     z-index: 0;
     /* Fits below the header and notice, so the whole figure shows without scrolling. */
     height: calc(100vh - 250px);

@@ -55,9 +55,11 @@ export default function AccountPanel({ user, defaultPassword, onChangePassword, 
     <section className="voice-panel" aria-label="Account">
       <div className="voice-panel-head">
         <h2>Account</h2>
-        <button type="button" className="link-button" onClick={onClose}>
-          Close
-        </button>
+        {onClose && (
+          <button type="button" className="link-button" onClick={onClose}>
+            Close
+          </button>
+        )}
       </div>
 
       <dl className="voice-facts">

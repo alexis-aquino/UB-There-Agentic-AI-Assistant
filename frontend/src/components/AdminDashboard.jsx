@@ -5,8 +5,9 @@ import { monthName, periodName, readYears, yearMonths } from '../admin/months.js
 import AccountPanel from './AccountPanel.jsx';
 import AdminAccounts from './AdminAccounts.jsx';
 import AdminKnowledge from './AdminKnowledge.jsx';
+import AppMenu from './AppMenu.jsx';
 import MonthPicker from './MonthPicker.jsx';
-import ThemeToggle from './ThemeToggle.jsx';
+import useMastheadHeight from '../hooks/useMastheadHeight.js';
 
 const FILTER_ORDER = ['answered', 'rerouted', 'pending', 'resolved', 'closed', 'flagged'];
 const PAGE = 25;
@@ -35,6 +36,7 @@ const sectionFromHash = () => {
   const hash = window.location.hash.split('/')[1];
   return hash === 'accounts' || hash === 'knowledge' ? hash : 'report';
 };
+const accountFromHash = () => window.location.hash === '#admin/account';
 const viewFromHash = () => {
   const hash = window.location.hash.split('/')[1];
   return VIEWS.some(([key]) => key === hash) ? hash : 'questions';
@@ -408,7 +410,7 @@ function TrendGrid({ report }) {
 
 /** The administrator's view of the query log: monthly trends and where every inquiry stands. */
 export default function AdminDashboard({ user, token, theme, defaultPassword, onChangePassword, onRename, onSignOut }) {
-  const [showAccount, setShowAccount] = useState(false);
+  const mastheadRef = useMastheadHeight();
   // An approved university department gets this same dashboard, limited by the backend to its own
   // students; it can't manage accounts or the knowledge base.
   const department = user.admin ? null : user.department;
@@ -438,9 +440,14 @@ export default function AdminDashboard({ user, token, theme, defaultPassword, on
 
   const [view, setView] = useState(viewFromHash);
   const [section, setSection] = useState(sectionFromHash);
+  const [onAccountPage, setOnAccountPage] = useState(accountFromHash);
   const current = sections.some(([key]) => key === section) ? section : 'report';
   useEffect(() => {
     const onHash = () => {
+      setOnAccountPage(accountFromHash());
+      window.scrollTo(0, 0);
+      // The account page leaves the section and tab as they were, to come back to.
+      if (accountFromHash()) return;
       setView(viewFromHash());
       setSection(sectionFromHash());
     };
@@ -451,6 +458,16 @@ export default function AdminDashboard({ user, token, theme, defaultPassword, on
   function openView(key) {
     setView(key);
     window.history.replaceState(null, '', `#admin/${key}`);
+  }
+
+  // Account opens as its own page (#admin/account), as in the student's menu; back returns to
+  // the section and tab it was opened from.
+  function openAccount() {
+    window.location.hash = '#admin/account';
+  }
+
+  function closeAccount() {
+    window.location.hash = `#admin/${current === 'report' ? view : current}`;
   }
 
   function openSection(key) {
@@ -521,7 +538,7 @@ export default function AdminDashboard({ user, token, theme, defaultPassword, on
 
   return (
     <div className="app-shell adm-shell">
-      <header className="masthead">
+      <header className="masthead" ref={mastheadRef}>
         <div className="masthead-brand">
           <span className="seal" aria-hidden="true">
             UB
@@ -533,371 +550,370 @@ export default function AdminDashboard({ user, token, theme, defaultPassword, on
             </p>
           </div>
         </div>
-        <div className="adm-head-actions">
-          <ThemeToggle theme={theme.theme} onToggle={theme.toggle} />
-          <button
-            type="button"
-            className="chip-button"
-            aria-expanded={showAccount}
-            onClick={() => setShowAccount(!showAccount)}
-          >
-            My account
-          </button>
-          <button type="button" className="chip-button" onClick={onSignOut}>
-            Sign out
-          </button>
-        </div>
+        <AppMenu
+          userName={user.name}
+          onAccount={openAccount}
+          theme={theme.theme}
+          onToggleTheme={theme.toggle}
+          onSignOut={onSignOut}
+        />
       </header>
 
-      {showAccount && (
-        <AccountPanel
-          user={user}
-          defaultPassword={defaultPassword}
-          onChangePassword={onChangePassword}
-          onRename={onRename}
-          onClose={() => setShowAccount(false)}
-        />
-      )}
-
-      {user.default_password && !showAccount && (
-        <div className="notice" role="status">
-          <span className="label">Notice</span>
-          <span>You are still using the starting password. Change it to keep your account yours.</span>
-          <button type="button" className="link-button" onClick={() => setShowAccount(true)}>
-            Change password
+      {onAccountPage ? (
+        <main className="menu-page">
+          <button type="button" className="link-button menu-page-back" onClick={closeAccount}>
+            ← Back to the dashboard
           </button>
-        </div>
-      )}
-
-      <nav className="adm-sections" aria-label="Dashboard">
-        {sections.map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            aria-current={current === key ? 'page' : undefined}
-            onClick={() => openSection(key)}
-          >
-            {label}
-          </button>
-        ))}
-      </nav>
-
-      {current === 'knowledge' && (
-        <div className="notice" role="status">
-          <span className="label">Sample data</span>
-          <span>Changes here are saved only in this browser. The assistant uses them once the backend can index them.</span>
-        </div>
-      )}
-
-      {department && (
-        <div className="notice" role="status">
-          <span className="label">Your department</span>
-          <span>
-            You see only the questions and accounts of students in the {department}. Guests and other departments
-            are hidden, and accounts are view-only. You can add to the knowledge base like an administrator.
-          </span>
-        </div>
-      )}
-
-      {current === 'accounts' && <AdminAccounts user={user} token={token} readOnly={Boolean(department)} />}
-
-      {current === 'knowledge' && <AdminKnowledge user={user} />}
-
-      {current === 'report' && !records && (
-        <p className="voice-hint">{loadError ? `Couldn't load the query log: ${loadError}` : 'Loading the query log…'}</p>
-      )}
-      {current === 'report' && flagError && <p className="voice-hint">Couldn't save the flag: {flagError}</p>}
-
-      {current === 'report' && records && (
+          <AccountPanel
+            user={user}
+            defaultPassword={defaultPassword}
+            onChangePassword={onChangePassword}
+            onRename={onRename}
+          />
+        </main>
+      ) : (
         <>
-          <section className="adm-cover">
-            <div>
-              <p className="label">Inquiry report{period.length > 1 ? ` · ${period.length} months` : ''}</p>
-              <h2 className="adm-title">
-                {months === 'all' ? 'All months' : period.length ? periodName(period) : 'No months selected'}
-              </h2>
-              {months === 'all' && <p className="adm-sub">{periodName(period)}</p>}
-            </div>
-            <MonthPicker
-              available={available}
-              value={months}
-              onChange={setMonths}
-              yearText={yearText}
-              onYearText={setYearText}
-            />
-          </section>
+        {user.default_password && (
+          <div className="notice" role="status">
+            <span className="label">Notice</span>
+            <span>You are still using the starting password. Change it to keep your account yours.</span>
+            <button type="button" className="link-button" onClick={openAccount}>
+              Change password
+            </button>
+          </div>
+        )}
 
-          {!report && (
-            <p className="voice-hint">Pick one or more months, or All months, from the dropdown to see the report.</p>
-          )}
+        <nav className="adm-sections" aria-label="Dashboard">
+          {sections.map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              aria-current={current === key ? 'page' : undefined}
+              onClick={() => openSection(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
 
-          {report && (
-            <>
-              <dl className="adm-ledger">
-                <div>
-                  <dt>Questions asked</dt>
-                  <dd>{asked.questions}</dd>
-                  <span className="adm-delta">
-                    from {asked.askers} {asked.askers === 1 ? 'student' : 'students'}
-                  </span>
-                  {single && <Delta now={asked.questions} before={before?.questions ?? 0} />}
-                </div>
-                <div>
-                  <dt>{STATES.answered.label}</dt>
-                  <dd>{s.answered}</dd>
-                  <span className="adm-delta">{percent(s.answered, asked.questions)}% of questions</span>
-                </div>
-                <div>
-                  <dt>{STATES.rerouted.label}</dt>
-                  <dd>{s.rerouted}</dd>
-                  <span className="adm-delta">not sent to an office yet</span>
-                </div>
-                <div>
-                  <dt>{STATES.pending.label}</dt>
-                  <dd>{s.pending}</dd>
-                  <span className="adm-delta">waiting on an office</span>
-                </div>
-                <div>
-                  <dt>{STATES.resolved.label}</dt>
-                  <dd>{s.resolved}</dd>
-                  <span className="adm-delta">{percent(s.resolved, sent)}% of those sent to offices</span>
-                </div>
-                <div>
-                  <dt>{STATES.closed.label}</dt>
-                  <dd>{s.closed}</dd>
-                  <span className="adm-delta">student’s account deleted</span>
-                </div>
-                <div>
-                  <dt>{STATES.flagged.label}</dt>
-                  <dd>{s.flagged}</dd>
-                  <span className="adm-delta">flagged</span>
-                </div>
-              </dl>
+        {current === 'knowledge' && (
+          <div className="notice" role="status">
+            <span className="label">Sample data</span>
+            <span>Changes here are saved only in this browser. The assistant uses them once the backend can index them.</span>
+          </div>
+        )}
 
-              <div className="adm-tabs" role="tablist" aria-label="Report views" onKeyDown={onTabKey}>
-                {VIEWS.map(([key, label]) => (
-                  <button
-                    key={key}
-                    id={`adm-tab-${key}`}
-                    type="button"
-                    role="tab"
-                    aria-selected={view === key}
-                    aria-controls={`adm-view-${key}`}
-                    tabIndex={view === key ? 0 : -1}
-                    onClick={() => openView(key)}
-                  >
-                    {label}
-                    {key === 'tracker' && <span className="adm-chip-n">{matches.length}</span>}
-                  </button>
-                ))}
+        {department && (
+          <div className="notice" role="status">
+            <span className="label">Your department</span>
+            <span>
+              You see only the questions and accounts of students in the {department}. Guests and other departments
+              are hidden, and accounts are view-only. You can add to the knowledge base like an administrator.
+            </span>
+          </div>
+        )}
+
+        {current === 'accounts' && <AdminAccounts user={user} token={token} readOnly={Boolean(department)} />}
+
+        {current === 'knowledge' && <AdminKnowledge user={user} />}
+
+        {current === 'report' && !records && (
+          <p className="voice-hint">{loadError ? `Couldn't load the query log: ${loadError}` : 'Loading the query log…'}</p>
+        )}
+        {current === 'report' && flagError && <p className="voice-hint">Couldn't save the flag: {flagError}</p>}
+
+        {current === 'report' && records && (
+          <>
+            <section className="adm-cover">
+              <div>
+                <p className="label">Inquiry report{period.length > 1 ? ` · ${period.length} months` : ''}</p>
+                <h2 className="adm-title">
+                  {months === 'all' ? 'All months' : period.length ? periodName(period) : 'No months selected'}
+                </h2>
+                {months === 'all' && <p className="adm-sub">{periodName(period)}</p>}
               </div>
+              <MonthPicker
+                available={available}
+                value={months}
+                onChange={setMonths}
+                yearText={yearText}
+                onYearText={setYearText}
+              />
+            </section>
 
-              {view === 'questions' && (
-                <div
-                  className="adm-columns adm-view"
-                  role="tabpanel"
-                  id="adm-view-questions"
-                  aria-labelledby="adm-tab-questions"
-                >
-                  <section className="adm-section">
-                    <h3>Top inquiry topics</h3>
-                    <p className="adm-sub">What students asked about most in {periodName(period)}.</p>
-                    {ranked.length === 0 ? (
-                      <p className="voice-hint">No questions {scope} yet.</p>
-                    ) : (
-                      <ol className="adm-bars">
-                        {ranked.map((t, i) => (
-                          <li key={t.topic}>
-                            <button
-                              type="button"
-                              className={topic === t.topic ? 'is-active' : ''}
-                              onClick={() => {
-                                setTopic(t.topic);
-                                openView('tracker');
-                              }}
-                              title="Show these in the tracker"
-                            >
-                              <span className="adm-bar-rank">{i + 1}</span>
-                              <span className="adm-bar-name">{t.topic}</span>
-                              <span className="adm-bar-count">
-                                {t.inPeriod} <small>({percent(t.inPeriod, asked.questions)}%)</small>
-                              </span>
-                              <span className="adm-bar-track" aria-hidden="true">
-                                <span
-                                  style={{
-                                    width: `${(t.inPeriod / topMax) * 100}%`,
-                                  }}
-                                />
-                              </span>
-                              {single && <Delta now={t.inPeriod} before={t.lastMonth} />}
-                            </button>
-                          </li>
-                        ))}
-                      </ol>
-                    )}
-                  </section>
+            {!report && (
+              <p className="voice-hint">Pick one or more months, or All months, from the dropdown to see the report.</p>
+            )}
 
-                  <section className="adm-section">
-                    <h3>Most asked questions</h3>
-                    <p className="adm-sub">Repeats are counted together, ignoring case and punctuation.</p>
-                    {report.topQuestions.length === 0 ? (
-                      <p className="voice-hint">Nothing asked yet.</p>
-                    ) : (
-                      <ol className="adm-top">
-                        {report.topQuestions.map((q) => (
-                          <li key={q.question}>
-                            <span className="adm-top-count">{q.count}×</span>
-                            <div>
-                              <p className="adm-top-question">{q.question}</p>
-                              <p className="adm-top-meta">
-                                Last asked {when(q.last.askedAt)} · <StatePill status={stateOf(q.last)} />
-                              </p>
-                            </div>
-                          </li>
-                        ))}
-                      </ol>
-                    )}
-                  </section>
-                </div>
-              )}
-
-              {view === 'trends' && (
-                <section
-                  className="adm-section adm-view"
-                  role="tabpanel"
-                  id="adm-view-trends"
-                  aria-labelledby="adm-tab-trends"
-                >
-                  <h3>Inquiry trends</h3>
-                  <p className="adm-sub">
-                    Questions per topic in each month picked at the top
-                    {report.months.length > 1 ? ` (${report.months.length} months)` : ''}. Darker means asked more
-                    often.
-                  </p>
-                  <TrendGrid report={report} />
-                </section>
-              )}
-
-              {view === 'tracker' && (
-                <section
-                  className="adm-section adm-view"
-                  role="tabpanel"
-                  id="adm-view-tracker"
-                  aria-labelledby="adm-tab-tracker"
-                >
-                  <div className="adm-tracker-head">
-                    <div>
-                      <h3>Inquiry tracker</h3>
-                      <p className="adm-sub">
-                        Every question from {periodName(period)} and where it stands. Open one to follow it, or flag it
-                        if it’s offensive or off-topic.
-                      </p>
-                    </div>
-                    <span className="adm-count">
-                      {matches.length} {matches.length === 1 ? 'inquiry' : 'inquiries'}
+            {report && (
+              <>
+                <dl className="adm-ledger">
+                  <div>
+                    <dt>Questions asked</dt>
+                    <dd>{asked.questions}</dd>
+                    <span className="adm-delta">
+                      from {asked.askers} {asked.askers === 1 ? 'student' : 'students'}
                     </span>
+                    {single && <Delta now={asked.questions} before={before?.questions ?? 0} />}
                   </div>
+                  <div>
+                    <dt>{STATES.answered.label}</dt>
+                    <dd>{s.answered}</dd>
+                    <span className="adm-delta">{percent(s.answered, asked.questions)}% of questions</span>
+                  </div>
+                  <div>
+                    <dt>{STATES.rerouted.label}</dt>
+                    <dd>{s.rerouted}</dd>
+                    <span className="adm-delta">not sent to an office yet</span>
+                  </div>
+                  <div>
+                    <dt>{STATES.pending.label}</dt>
+                    <dd>{s.pending}</dd>
+                    <span className="adm-delta">waiting on an office</span>
+                  </div>
+                  <div>
+                    <dt>{STATES.resolved.label}</dt>
+                    <dd>{s.resolved}</dd>
+                    <span className="adm-delta">{percent(s.resolved, sent)}% of those sent to offices</span>
+                  </div>
+                  <div>
+                    <dt>{STATES.closed.label}</dt>
+                    <dd>{s.closed}</dd>
+                    <span className="adm-delta">student’s account deleted</span>
+                  </div>
+                  <div>
+                    <dt>{STATES.flagged.label}</dt>
+                    <dd>{s.flagged}</dd>
+                    <span className="adm-delta">flagged</span>
+                  </div>
+                </dl>
 
-                  <div className="adm-filters">
-                    {/* One state at a time: picking one replaces the last. */}
-                    <div className="adm-chips" role="group" aria-label="Filter by state">
-                      <button type="button" aria-pressed={!status} onClick={() => setStatus('')}>
-                        All
-                      </button>
-                      {FILTER_ORDER.map((key) => (
-                        <button
-                          key={key}
-                          type="button"
-                          aria-pressed={status === key}
-                          className={key === 'flagged' ? 'adm-chip-flag' : undefined}
-                          onClick={() => setStatus(status === key ? '' : key)}
-                        >
-                          {STATES[key].label}
-                          <span className="adm-chip-n">{s[key]}</span>
+                <div className="adm-tabs" role="tablist" aria-label="Report views" onKeyDown={onTabKey}>
+                  {VIEWS.map(([key, label]) => (
+                    <button
+                      key={key}
+                      id={`adm-tab-${key}`}
+                      type="button"
+                      role="tab"
+                      aria-selected={view === key}
+                      aria-controls={`adm-view-${key}`}
+                      tabIndex={view === key ? 0 : -1}
+                      onClick={() => openView(key)}
+                    >
+                      {label}
+                      {key === 'tracker' && <span className="adm-chip-n">{matches.length}</span>}
+                    </button>
+                  ))}
+                </div>
+
+                {view === 'questions' && (
+                  <div
+                    className="adm-columns adm-view"
+                    role="tabpanel"
+                    id="adm-view-questions"
+                    aria-labelledby="adm-tab-questions"
+                  >
+                    <section className="adm-section">
+                      <h3>Top inquiry topics</h3>
+                      <p className="adm-sub">What students asked about most in {periodName(period)}.</p>
+                      {ranked.length === 0 ? (
+                        <p className="voice-hint">No questions {scope} yet.</p>
+                      ) : (
+                        <ol className="adm-bars">
+                          {ranked.map((t, i) => (
+                            <li key={t.topic}>
+                              <button
+                                type="button"
+                                className={topic === t.topic ? 'is-active' : ''}
+                                onClick={() => {
+                                  setTopic(t.topic);
+                                  openView('tracker');
+                                }}
+                                title="Show these in the tracker"
+                              >
+                                <span className="adm-bar-rank">{i + 1}</span>
+                                <span className="adm-bar-name">{t.topic}</span>
+                                <span className="adm-bar-count">
+                                  {t.inPeriod} <small>({percent(t.inPeriod, asked.questions)}%)</small>
+                                </span>
+                                <span className="adm-bar-track" aria-hidden="true">
+                                  <span
+                                    style={{
+                                      width: `${(t.inPeriod / topMax) * 100}%`,
+                                    }}
+                                  />
+                                </span>
+                                {single && <Delta now={t.inPeriod} before={t.lastMonth} />}
+                              </button>
+                            </li>
+                          ))}
+                        </ol>
+                      )}
+                    </section>
+
+                    <section className="adm-section">
+                      <h3>Most asked questions</h3>
+                      <p className="adm-sub">Repeats are counted together, ignoring case and punctuation.</p>
+                      {report.topQuestions.length === 0 ? (
+                        <p className="voice-hint">Nothing asked yet.</p>
+                      ) : (
+                        <ol className="adm-top">
+                          {report.topQuestions.map((q) => (
+                            <li key={q.question}>
+                              <span className="adm-top-count">{q.count}×</span>
+                              <div>
+                                <p className="adm-top-question">{q.question}</p>
+                                <p className="adm-top-meta">
+                                  Last asked {when(q.last.askedAt)} · <StatePill status={stateOf(q.last)} />
+                                </p>
+                              </div>
+                            </li>
+                          ))}
+                        </ol>
+                      )}
+                    </section>
+                  </div>
+                )}
+
+                {view === 'trends' && (
+                  <section
+                    className="adm-section adm-view"
+                    role="tabpanel"
+                    id="adm-view-trends"
+                    aria-labelledby="adm-tab-trends"
+                  >
+                    <h3>Inquiry trends</h3>
+                    <p className="adm-sub">
+                      Questions per topic in each month picked at the top
+                      {report.months.length > 1 ? ` (${report.months.length} months)` : ''}. Darker means asked more
+                      often.
+                    </p>
+                    <TrendGrid report={report} />
+                  </section>
+                )}
+
+                {view === 'tracker' && (
+                  <section
+                    className="adm-section adm-view"
+                    role="tabpanel"
+                    id="adm-view-tracker"
+                    aria-labelledby="adm-tab-tracker"
+                  >
+                    <div className="adm-tracker-head">
+                      <div>
+                        <h3>Inquiry tracker</h3>
+                        <p className="adm-sub">
+                          Every question from {periodName(period)} and where it stands. Open one to follow it, or flag it
+                          if it’s offensive or off-topic.
+                        </p>
+                      </div>
+                      <span className="adm-count">
+                        {matches.length} {matches.length === 1 ? 'inquiry' : 'inquiries'}
+                      </span>
+                    </div>
+
+                    <div className="adm-filters">
+                      {/* One state at a time: picking one replaces the last. */}
+                      <div className="adm-chips" role="group" aria-label="Filter by state">
+                        <button type="button" aria-pressed={!status} onClick={() => setStatus('')}>
+                          All
                         </button>
-                      ))}
-                    </div>
-                    <div className="adm-filter-row">
-                      <input
-                        type="search"
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        placeholder="Search questions or students…"
-                        aria-label="Search questions or students"
-                      />
-                      <select value={topic} onChange={(e) => setTopic(e.target.value)} aria-label="Topic">
-                        <option value="">All topics</option>
-                        {topics.map((name) => (
-                          <option key={name} value={name}>
-                            {name}
-                          </option>
+                        {FILTER_ORDER.map((key) => (
+                          <button
+                            key={key}
+                            type="button"
+                            aria-pressed={status === key}
+                            className={key === 'flagged' ? 'adm-chip-flag' : undefined}
+                            onClick={() => setStatus(status === key ? '' : key)}
+                          >
+                            {STATES[key].label}
+                            <span className="adm-chip-n">{s[key]}</span>
+                          </button>
                         ))}
-                      </select>
+                      </div>
+                      <div className="adm-filter-row">
+                        <input
+                          type="search"
+                          value={search}
+                          onChange={(e) => setSearch(e.target.value)}
+                          placeholder="Search questions or students…"
+                          aria-label="Search questions or students"
+                        />
+                        <select value={topic} onChange={(e) => setTopic(e.target.value)} aria-label="Topic">
+                          <option value="">All topics</option>
+                          {topics.map((name) => (
+                            <option key={name} value={name}>
+                              {name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
-                  </div>
 
-                  {matches.length === 0 ? (
-                    <p className="voice-hint">No inquiries match.</p>
-                  ) : (
-                    <div className="adm-scroll">
-                      <table className="adm-log">
-                        <thead>
-                          <tr>
-                            <th scope="col">Question</th>
-                            <th scope="col">Student</th>
-                            <th scope="col">Topic</th>
-                            <th scope="col">Asked</th>
-                            <th scope="col">State</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {matches.slice(0, shown).map((q) => (
-                            <Fragment key={q.id}>
-                              <tr className={`${open === q.id ? 'is-open' : ''} ${q.flag ? 'is-flagged' : ''}`}>
-                                <td>
-                                  <button
-                                    type="button"
-                                    className="adm-log-question"
-                                    aria-expanded={open === q.id}
-                                    onClick={() => setOpen(open === q.id ? null : q.id)}
-                                  >
-                                    {q.question}
-                                  </button>
-                                </td>
-                                <td className="adm-log-muted">
-                                  {q.student?.name ?? 'Not signed in'}
-                                  {q.student?.deleted && <span className="adm-log-ref">Account deleted</span>}
-                                </td>
-                                <td className="adm-log-muted">{q.topic}</td>
-                                <td className="adm-log-muted">{when(q.askedAt)}</td>
-                                <td>
-                                  <StatePill status={stateOf(q)} />
-                                  {q.ticket && <span className="adm-log-ref">{q.ticket.ref}</span>}
-                                </td>
-                              </tr>
-                              {open === q.id && (
-                                <tr className="adm-log-detail">
-                                  <td colSpan={5}>
-                                    <Timeline q={q} />
-                                    <FlagControls q={q} onFlag={flagInquiry} />
+                    {matches.length === 0 ? (
+                      <p className="voice-hint">No inquiries match.</p>
+                    ) : (
+                      <div className="adm-scroll">
+                        <table className="adm-log">
+                          <thead>
+                            <tr>
+                              <th scope="col">Question</th>
+                              <th scope="col">Student</th>
+                              <th scope="col">Topic</th>
+                              <th scope="col">Asked</th>
+                              <th scope="col">State</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {matches.slice(0, shown).map((q) => (
+                              <Fragment key={q.id}>
+                                <tr className={`${open === q.id ? 'is-open' : ''} ${q.flag ? 'is-flagged' : ''}`}>
+                                  <td>
+                                    <button
+                                      type="button"
+                                      className="adm-log-question"
+                                      aria-expanded={open === q.id}
+                                      onClick={() => setOpen(open === q.id ? null : q.id)}
+                                    >
+                                      {q.question}
+                                    </button>
+                                  </td>
+                                  <td className="adm-log-muted">
+                                    {q.student?.name ?? 'Not signed in'}
+                                    {q.student?.deleted && <span className="adm-log-ref">Account deleted</span>}
+                                  </td>
+                                  <td className="adm-log-muted">{q.topic}</td>
+                                  <td className="adm-log-muted">{when(q.askedAt)}</td>
+                                  <td>
+                                    <StatePill status={stateOf(q)} />
+                                    {q.ticket && <span className="adm-log-ref">{q.ticket.ref}</span>}
                                   </td>
                                 </tr>
-                              )}
-                            </Fragment>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                  {shown < matches.length && (
-                    <button type="button" className="link-button adm-more" onClick={() => setShown(shown + PAGE)}>
-                      Show more ({matches.length - shown} left)
-                    </button>
-                  )}
-                </section>
-              )}
-            </>
-          )}
+                                {open === q.id && (
+                                  <tr className="adm-log-detail">
+                                    <td colSpan={5}>
+                                      <Timeline q={q} />
+                                      <FlagControls q={q} onFlag={flagInquiry} />
+                                    </td>
+                                  </tr>
+                                )}
+                              </Fragment>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                    {shown < matches.length && (
+                      <button type="button" className="link-button adm-more" onClick={() => setShown(shown + PAGE)}>
+                        Show more ({matches.length - shown} left)
+                      </button>
+                    )}
+                  </section>
+                )}
+              </>
+            )}
+          </>
+        )}
         </>
       )}
     </div>

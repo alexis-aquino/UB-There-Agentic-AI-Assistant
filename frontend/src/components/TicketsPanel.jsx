@@ -40,9 +40,11 @@ export default function TicketsPanel({ token, onClose }) {
           <button type="button" className="link-button" onClick={load}>
             Refresh
           </button>
-          <button type="button" className="link-button" onClick={onClose}>
-            Close
-          </button>
+          {onClose && (
+            <button type="button" className="link-button" onClick={onClose}>
+              Close
+            </button>
+          )}
         </span>
       </div>
 

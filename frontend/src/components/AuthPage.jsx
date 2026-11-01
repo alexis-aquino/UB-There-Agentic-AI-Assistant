@@ -127,8 +127,9 @@ export default function AuthPage({ auth, theme }) {
             {errorBox}
 
             <div className="auth-side-door">
-              <button type="button" className="link-button" onClick={() => go('guest')}>
-                Login
+              <button type="button" className="button-primary login-button" onClick={() => go('guest')}>
+                <MailMark />
+                <span>Login with email</span>
               </button>
               <p className="auth-switch">
                 No account yet?{' '}
@@ -272,5 +273,14 @@ export default function AuthPage({ auth, theme }) {
         )}
       </section>
     </div>
+  );
+}
+
+function MailMark() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="5" width="18" height="14" rx="1.5" />
+      <path d="m3.5 6 8.5 7 8.5-7" />
+    </svg>
   );
 }

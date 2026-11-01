@@ -6,6 +6,7 @@ import SourceView from './SourceView.jsx';
 import AppMenu from './AppMenu.jsx';
 import TicketsPanel from './TicketsPanel.jsx';
 import VoicePanel from './VoicePanel.jsx';
+import useMastheadHeight from '../hooks/useMastheadHeight.js';
 import useVoice from '../hooks/useVoice.js';
 import { API_URL } from '../api.js';
 
@@ -18,6 +19,18 @@ const STARTERS = [
 ];
 
 const VOICE_KEY = 'ub-there-voice';
+
+// The menu's items each open as their own page in place of the chat, one URL each, so the
+// browser's back button and a reload both work. The chat stays mounted underneath.
+const PAGES = { '#/account': 'account', '#/questions': 'questions', '#/voice': 'voice' };
+
+function pageFromHash() {
+  return PAGES[window.location.hash] ?? null;
+}
+
+function openPage(page) {
+  window.location.hash = Object.keys(PAGES).find((hash) => PAGES[hash] === page) ?? '';
+}
 
 function sourceLabel(source) {
   // "studenthandbook.pdf p.99" -> "Student handbook, p. 99"
@@ -43,17 +56,17 @@ function readSavedVoice() {
 
 export default function ChatBot({ auth, theme, onOpenAdmin }) {
   const { user, token, config, changePassword, logout } = auth;
+  const mastheadRef = useMastheadHeight();
   // One conversation thread per signed-in user, fresh on each page load.
   const [sessionId] = useState(() => `user-${user.id}-${Math.random().toString(36).slice(2, 8)}`);
-  const [showAccount, setShowAccount] = useState(false);
-  const [showTickets, setShowTickets] = useState(false);
+  const [page, setPage] = useState(pageFromHash);
+  const onVoicePage = page === 'voice'; // the voice list is fetched afresh each time it opens
   const [askingFor, setAskingFor] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState(null);
   const [voiceOn, setVoiceOn] = useState(true);
-  const [showVoicePanel, setShowVoicePanel] = useState(false);
   const [voiceCatalog, setVoiceCatalog] = useState(null);
   const [voiceId, setVoiceId] = useState(readSavedVoice);
   const [previewing, setPreviewing] = useState(null);
@@ -71,6 +84,15 @@ export default function ChatBot({ auth, theme, onOpenAdmin }) {
   }, [loading]);
 
   useEffect(() => {
+    const onHash = () => {
+      setPage(pageFromHash());
+      window.scrollTo(0, 0);
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+
+  useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [messages, isSending]);
 
@@ -83,7 +105,7 @@ export default function ChatBot({ auth, theme, onOpenAdmin }) {
         if (catalog && !catalog.voices.some((v) => v.id === readSavedVoice())) setVoiceId(null);
       })
       .catch(() => setVoiceCatalog(null));
-  }, [showVoicePanel]);
+  }, [onVoicePage]);
 
   const chooseVoice = (id) => {
     setVoiceId(id);
@@ -211,7 +233,7 @@ export default function ChatBot({ auth, theme, onOpenAdmin }) {
 
   return (
     <div className="app-shell">
-      <header className="masthead">
+      <header className="masthead" ref={mastheadRef}>
         <div className="masthead-brand">
           <span className="seal" aria-hidden="true">UB</span>
           <div>
@@ -227,9 +249,9 @@ export default function ChatBot({ auth, theme, onOpenAdmin }) {
             if (voiceOn) stop();
             setVoiceOn(!voiceOn);
           }}
-          onVoiceSettings={() => setShowVoicePanel(true)}
-          onMyQuestions={() => setShowTickets(true)}
-          onAccount={() => setShowAccount(true)}
+          onVoiceSettings={() => openPage('voice')}
+          onMyQuestions={() => openPage('questions')}
+          onAccount={() => openPage('account')}
           onAdmin={onOpenAdmin}
           theme={theme.theme}
           onToggleTheme={theme.toggle}
@@ -240,40 +262,46 @@ export default function ChatBot({ auth, theme, onOpenAdmin }) {
         />
       </header>
 
-      {user.default_password && !showAccount && (
+      {user.default_password && !page && (
         <div className="notice" role="status">
           <span className="label">Notice</span>
           <span>You are still using the starting password. Change it to keep your account yours.</span>
-          <button type="button" className="link-button" onClick={() => setShowAccount(true)}>
+          <button type="button" className="link-button" onClick={() => openPage('account')}>
             Change password
           </button>
         </div>
       )}
 
-      {showAccount && (
-        <AccountPanel
-          user={user}
-          defaultPassword={config.default_password}
-          onChangePassword={changePassword}
-          onRename={auth.updateName}
-          onClose={() => setShowAccount(false)}
-        />
+      {page && (
+        <main className="menu-page">
+          <button type="button" className="link-button menu-page-back" onClick={() => openPage(null)}>
+            ← Back to the assistant
+          </button>
+
+          {page === 'account' && (
+            <AccountPanel
+              user={user}
+              defaultPassword={config.default_password}
+              onChangePassword={changePassword}
+              onRename={auth.updateName}
+            />
+          )}
+
+          {page === 'questions' && <TicketsPanel token={token} />}
+
+          {page === 'voice' && (
+            <VoicePanel
+              catalog={voiceCatalog}
+              selected={selectedVoice}
+              onSelect={chooseVoice}
+              onPreview={previewVoice}
+              previewing={previewing}
+            />
+          )}
+        </main>
       )}
 
-      {showTickets && <TicketsPanel token={token} onClose={() => setShowTickets(false)} />}
-
-      {showVoicePanel && (
-        <VoicePanel
-          catalog={voiceCatalog}
-          selected={selectedVoice}
-          onSelect={chooseVoice}
-          onPreview={previewVoice}
-          previewing={previewing}
-          onClose={() => setShowVoicePanel(false)}
-        />
-      )}
-
-      <div className="desk">
+      <div className="desk" hidden={Boolean(page)}>
         <AvatarStage thinking={isSending} speaking={speaking} />
 
         <main className="page">
