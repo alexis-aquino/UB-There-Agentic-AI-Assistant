@@ -2,8 +2,10 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import { STATES, buildReport, filterRecords, monthOf, stateOf } from '../admin/report.js';
 import { flagInquiry as saveFlag, loadQueryLog } from '../admin/queryLog.js';
 import { monthName, periodName, readYears, yearMonths } from '../admin/months.js';
+import { loadAccounts } from '../admin/accounts.js';
 import AccountPanel from './AccountPanel.jsx';
 import AdminAccounts from './AdminAccounts.jsx';
+import AdminInbox from './AdminInbox.jsx';
 import AdminKnowledge from './AdminKnowledge.jsx';
 import AppMenu from './AppMenu.jsx';
 import MonthPicker from './MonthPicker.jsx';
@@ -19,22 +21,30 @@ const VIEWS = [
   ['tracker', 'Inquiry tracker'],
 ];
 // The dashboard's parts. The report keeps its own tabs (#admin/questions …); the others are
-// #admin/accounts and #admin/knowledge.
-// A university department's dashboard: its students' questions, its students (view-only), and the
-// knowledge base, where it adds content like an administrator.
+// #admin/inbox, #admin/accounts and #admin/knowledge.
+// A university department's dashboard: its students' questions, the questions sent to it, its
+// students (view-only), and the knowledge base, where it adds content like an administrator.
 const DEPARTMENT_SECTIONS = [
   ['report', 'Inquiry report'],
+  ['inbox', 'Questions to answer'],
   ['accounts', 'Students'],
+  ['knowledge', 'Knowledge base'],
+];
+// A university office has no students of its own: its report is the questions sent to it.
+const OFFICE_SECTIONS = [
+  ['report', 'Inquiry report'],
+  ['inbox', 'Questions to answer'],
   ['knowledge', 'Knowledge base'],
 ];
 const SECTIONS = [
   ['report', 'Inquiry report'],
+  ['inbox', 'Questions to answer'],
   ['accounts', 'Accounts'],
   ['knowledge', 'Knowledge base'],
 ];
 const sectionFromHash = () => {
   const hash = window.location.hash.split('/')[1];
-  return hash === 'accounts' || hash === 'knowledge' ? hash : 'report';
+  return ['inbox', 'accounts', 'knowledge'].includes(hash) ? hash : 'report';
 };
 const accountFromHash = () => window.location.hash === '#admin/account';
 const viewFromHash = () => {
@@ -123,7 +133,7 @@ function Timeline({ q }) {
     steps.push({
       title: 'Rerouted',
       at: q.repliedAt,
-      detail: 'The chatbot couldn’t answer it from the handbook and offered “Ask an office”.',
+      detail: 'The chatbot couldn’t answer it from the handbook and offered “Ask an office or department”.',
       state: 'warn',
     });
     if (q.ticket) {
@@ -409,12 +419,22 @@ function TrendGrid({ report }) {
 }
 
 /** The administrator's view of the query log: monthly trends and where every inquiry stands. */
-export default function AdminDashboard({ user, token, theme, defaultPassword, onChangePassword, onRename, onSignOut }) {
+export default function AdminDashboard({
+  user,
+  token,
+  theme,
+  defaultPassword,
+  offices = [],
+  onChangePassword,
+  onRename,
+  onSignOut,
+}) {
   const mastheadRef = useMastheadHeight();
-  // An approved university department gets this same dashboard, limited by the backend to its own
-  // students; it can't manage accounts or the knowledge base.
+  // An approved university department or office gets this same dashboard, limited by the backend
+  // to its own students and the questions sent to it; it can't manage accounts.
   const department = user.admin ? null : user.department;
-  const sections = department ? DEPARTMENT_SECTIONS : SECTIONS;
+  const isOffice = Boolean(department) && offices.includes(department);
+  const sections = isOffice ? OFFICE_SECTIONS : department ? DEPARTMENT_SECTIONS : SECTIONS;
   const [records, setRecords] = useState(null); // the query log, newest first
   const [topics, setTopics] = useState([]);
   const [loadError, setLoadError] = useState(null);
@@ -429,6 +449,15 @@ export default function AdminDashboard({ user, token, theme, defaultPassword, on
   const [shown, setShown] = useState(PAGE);
   const [open, setOpen] = useState(null);
 
+  // Sign-ups waiting for approval, counted on the Accounts button so the admin sees them from any tab.
+  const [waiting, setWaiting] = useState(0);
+  useEffect(() => {
+    if (!user.admin) return;
+    loadAccounts(token)
+      .then((data) => setWaiting(data.accounts.filter((a) => a.pending).length))
+      .catch(() => {}); // the Accounts tab shows the error
+  }, [token, user.admin]);
+
   useEffect(() => {
     loadQueryLog(token)
       .then((data) => {
@@ -441,7 +470,7 @@ export default function AdminDashboard({ user, token, theme, defaultPassword, on
   const [view, setView] = useState(viewFromHash);
   const [section, setSection] = useState(sectionFromHash);
   const [onAccountPage, setOnAccountPage] = useState(accountFromHash);
-  const current = sections.some(([key]) => key === section) ? section : 'report';
+  const current = sections.some(([key]) => key === section) ? section : sections[0][0];
   useEffect(() => {
     const onHash = () => {
       setOnAccountPage(accountFromHash());
@@ -546,7 +575,11 @@ export default function AdminDashboard({ user, token, theme, defaultPassword, on
           <div>
             <h1>UB There</h1>
             <p className="label">
-              {department ? `University department · ${department}` : `Administrator · ${user.name}`}
+              {isOffice
+                ? `University office · ${department}`
+                : department
+                  ? `University department · ${department}`
+                  : `Administrator · ${user.name}`}
             </p>
           </div>
         </div>
@@ -592,6 +625,11 @@ export default function AdminDashboard({ user, token, theme, defaultPassword, on
               onClick={() => openSection(key)}
             >
               {label}
+              {key === 'accounts' && waiting > 0 && (
+                <span className="adm-chip-n" title="Sign-ups waiting for approval">
+                  {waiting}
+                </span>
+              )}
             </button>
           ))}
         </nav>
@@ -603,17 +641,31 @@ export default function AdminDashboard({ user, token, theme, defaultPassword, on
           </div>
         )}
 
-        {department && (
+        {isOffice && (
+          <div className="notice" role="status">
+            <span className="label">Your office</span>
+            <span>
+              Your Inquiry report covers the questions students sent the {department}, and they wait under Questions to
+              answer. You can add to the knowledge base like an administrator.
+            </span>
+          </div>
+        )}
+        {department && !isOffice && (
           <div className="notice" role="status">
             <span className="label">Your department</span>
             <span>
-              You see only the questions and accounts of students in the {department}. Guests and other departments
-              are hidden, and accounts are view-only. You can add to the knowledge base like an administrator.
+              You see only the questions and accounts of students in the {department}, and answer the questions sent
+              to it. Guests and other departments are hidden, and accounts are view-only. You can add to the knowledge
+              base like an administrator.
             </span>
           </div>
         )}
 
-        {current === 'accounts' && <AdminAccounts user={user} token={token} readOnly={Boolean(department)} />}
+        {current === 'inbox' && <AdminInbox token={token} office={department} />}
+
+        {current === 'accounts' && (
+          <AdminAccounts user={user} token={token} readOnly={Boolean(department)} onWaiting={setWaiting} />
+        )}
 
         {current === 'knowledge' && <AdminKnowledge user={user} />}
 
@@ -662,9 +714,12 @@ export default function AdminDashboard({ user, token, theme, defaultPassword, on
                     <span className="adm-delta">{percent(s.answered, asked.questions)}% of questions</span>
                   </div>
                   <div>
-                    <dt>{STATES.rerouted.label}</dt>
-                    <dd>{s.rerouted}</dd>
-                    <span className="adm-delta">not sent to an office yet</span>
+                    <dt>Rerouted</dt>
+                    <dd>{report.rerouted}</dd>
+                    <span className="adm-delta">
+                      {percent(report.rerouted, asked.questions)}% of questions · {sent} sent to an office,{' '}
+                      {report.notSent} not yet
+                    </span>
                   </div>
                   <div>
                     <dt>{STATES.pending.label}</dt>

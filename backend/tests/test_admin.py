@@ -6,7 +6,6 @@ from app.brain.memory import get_memory
 from app.brain.topics import topic_of
 from app.main import app
 from app.routers import auth
-from tests.test_tickets import answer_link_from, outbox
 
 client = TestClient(app)
 
@@ -170,9 +169,8 @@ def test_delete_waits_until_disabled_long_enough_and_keeps_the_history():
             json={"question": "Office question", "office_id": "registrar", "inquiry_id": inquiry},
             headers=headers,
         ).json()["ref"]
-        tickets[inquiry, "link"] = answer_link_from(outbox()[-1])
-    ref, token = tickets[resolved, "link"]
-    client.post(f"/answer/{ref}", data={"t": token, "answer": "Yes, file the form before week 3."})
+    answer = f"/api/admin/tickets/{tickets[resolved]}/answer"
+    client.post(answer, json={"answer": "Yes, file the form before week 3."}, headers=ADMIN)
     inquiry = answered
     client.post("/api/admin/accounts/disable", json={"ids": [user.id]}, headers=ADMIN)
     early = client.post("/api/admin/accounts/delete", json={"ids": [user.id]}, headers=ADMIN)
@@ -200,7 +198,7 @@ def test_delete_waits_until_disabled_long_enough_and_keeps_the_history():
     assert all(report[i]["student"]["deleted"] for i in (answered, rerouted, pending, resolved))
 
     # The office can no longer answer: nobody would receive it.
-    ref, token = tickets[pending, "link"]
-    page = client.get(f"/answer/{ref}", params={"t": token})
-    assert page.status_code == 410 and "account has been deleted" in page.text
-    assert client.post(f"/answer/{ref}", data={"t": token, "answer": "Yes."}).status_code == 410
+    waiting = next(t for t in client.get("/api/admin/tickets", headers=ADMIN).json() if t["ref"] == tickets[pending])
+    assert waiting["closed"] is True
+    answer = f"/api/admin/tickets/{tickets[pending]}/answer"
+    assert client.post(answer, json={"answer": "Yes."}, headers=ADMIN).status_code == 410

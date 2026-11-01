@@ -3,7 +3,7 @@ account, with disabling and deleting.
 
 Administrators (ADMIN_EMAILS in backend/.env, UB addresses only) see everything and manage
 accounts. An approved university department sees only its own students and their questions, and
-can't change accounts.
+can't change accounts. An approved university office sees the questions sent to it.
 """
 
 import sqlite3
@@ -18,6 +18,7 @@ from app.config import get_settings
 from app.routers.auth import admin_user, get_store, is_admin, kind_of, staff_user
 from app.routers.tickets import get_tickets
 from app.schemas import AccountsRequest, FlagRequest
+from app.tickets.offices import is_listed, load_offices
 from app.tickets.store import Ticket
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -92,14 +93,30 @@ def _department_of(row: sqlite3.Row, students: dict[int, User | None]) -> str | 
     return row["asker_department"]
 
 
+def _is_office(scope: str) -> bool:
+    return scope in {office.name for office in load_offices()}
+
+
+def _in_scope(
+    row: sqlite3.Row, scope: str, is_office: bool, students: dict[int, User | None], tickets: dict[int, Ticket]
+) -> bool:
+    """An office has no students of its own: its report is the questions sent to it. A college's
+    report is its own students' questions."""
+    if is_office:
+        ticket = tickets.get(row["id"])
+        return bool(ticket and ticket.office_name == scope)
+    return _department_of(row, students) == scope
+
+
 @router.get("/inquiries")
 def inquiries(staff: User = Depends(staff_user)) -> dict:
     rows = get_memory().inquiries()
     students = _students(rows)
+    tickets = get_tickets().by_inquiry()
     department = _scope(staff)
     if department:
-        rows = [row for row in rows if _department_of(row, students) == department]
-    tickets = get_tickets().by_inquiry()
+        office = _is_office(department)
+        rows = [row for row in rows if _in_scope(row, department, office, students, tickets)]
     return {
         "topics": ALL_TOPICS,
         "department": department,
@@ -110,11 +127,14 @@ def inquiries(staff: User = Depends(staff_user)) -> dict:
 @router.put("/inquiries/{inquiry_id}/flag")
 def flag(inquiry_id: int, body: FlagRequest, admin: User = Depends(staff_user)) -> dict:
     """Mark a question offensive or off-topic (or clear the mark). Flagged ones stay out of the top
-    questions. A department can only flag its own students' questions."""
+    questions. A department can only flag its own students' questions, an office the ones sent to it."""
     memory = get_memory()
     found = memory.inquiry(inquiry_id)
     department = _scope(admin)
-    if found is None or (department and _department_of(found, _students([found])) != department):
+    if found is None or (
+        department
+        and not _in_scope(found, department, _is_office(department), _students([found]), get_tickets().by_inquiry())
+    ):
         raise HTTPException(status_code=404, detail="That question isn't in the log.")
     if body.flagged:
         at = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
@@ -143,6 +163,7 @@ def _accounts(department: str | None = None) -> dict:
     """Every account, in the shape the Accounts page reads (frontend/src/admin/accounts.js).
     With `department`, only that department's students (a university department's view)."""
     activity = get_memory().activity_by_user()
+    offices = {office.name for office in load_offices()}
     accounts = []
     for row in get_store().all_rows():
         questions, last_asked = activity.get(row["id"], (0, None))
@@ -160,6 +181,13 @@ def _accounts(department: str | None = None) -> dict:
                 "name": row["name"],
                 "role": kind_of(user),
                 "department": row["department"],
+                # University department accounts: what their department is (department | office), and
+                # whether they typed it in under Other, for the administrator to check before approving.
+                "unitKind": (row["unit_kind"] or ("office" if row["department"] in offices else "department"))
+                if row["account_type"] == "department"
+                else None,
+                "typedIn": row["account_type"] == "department" and bool(row["department"])
+                and not is_listed(row["department"]),
                 # University departments wait for an administrator before they see any student.
                 "pending": row["account_type"] == "department" and not row["approved_by"],
                 "signIn": "UB mail" if row["google_linked"] else "Email & password",
@@ -205,11 +233,22 @@ def approve_accounts(body: AccountsRequest, admin: User = Depends(admin_user)) -
     return _accounts()
 
 
+@router.post("/accounts/reject")
+def reject_accounts(body: AccountsRequest, admin: User = Depends(admin_user)) -> dict:
+    """Reject University department sign-ups still waiting for approval: the account is deleted at
+    once (it never saw anything), and signing in with it says it was rejected."""
+    store = get_store()
+    if len(store.pending(body.ids)) < len(set(body.ids)):
+        raise HTTPException(status_code=400, detail="Only department accounts waiting for approval can be rejected.")
+    store.reject(body.ids, admin.name)
+    return _accounts()
+
+
 @router.post("/accounts/delete")
 def delete_accounts(body: AccountsRequest, admin: User = Depends(admin_user)) -> dict:
     """Deletes accounts that have been disabled for account_delete_after_days. Their history stays:
     questions keep their name in the report, office tickets are kept (the office can no longer answer
-    them, see tickets.answer_form), and questions still open are marked Closed."""
+    them, see tickets.answer), and questions still open are marked Closed."""
     wait = get_settings().account_delete_after_days
     rows = {row["id"]: row for row in get_store().all_rows()}
     ready = [

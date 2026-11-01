@@ -1,5 +1,5 @@
-"""Asking an office: questions the assistant can't answer, passed to a university office.
+"""Asking an office: questions the assistant can't answer, passed to a university office or college.
 
-The app emails the office from its own address with a private "answer here" link; the
-office's answer lands back in the app, on the student's "My questions" list.
+The office or college answers in the dashboard, from its University department account; the
+answer lands back in the app, on the student's "My questions" list. No email is involved.
 """

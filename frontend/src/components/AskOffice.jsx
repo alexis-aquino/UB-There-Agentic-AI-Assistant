@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'react';
 import { apiFetch } from '../api.js';
 
-/** Pass a question the assistant couldn't answer to a university office. */
+const GROUPS = [
+  ['office', 'Offices'],
+  ['department', 'Departments'],
+];
+
+/** Pass a question the assistant couldn't answer to a university office or department. It answers
+ * in its dashboard; the app suggests the one that fits the question. */
 export default function AskOffice({ question, inquiryId, token, onSent, onCancel }) {
   const [offices, setOffices] = useState([]);
   const [officeId, setOfficeId] = useState('');
@@ -10,13 +16,14 @@ export default function AskOffice({ question, inquiryId, token, onSent, onCancel
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    apiFetch(`/api/offices?question=${encodeURIComponent(question)}`)
+    // Signed in, so a student's own department can be suggested when no office fits.
+    apiFetch(`/api/offices?question=${encodeURIComponent(question)}`, { token })
       .then((data) => {
         setOffices(data.offices);
         setOfficeId(data.suggested ?? data.offices[0]?.id ?? '');
       })
       .catch((err) => setError(err.message));
-  }, [question]);
+  }, [question, token]);
 
   const send = async (e) => {
     e.preventDefault();
@@ -36,14 +43,20 @@ export default function AskOffice({ question, inquiryId, token, onSent, onCancel
 
   return (
     <form className="ask-office" onSubmit={send}>
-      <p className="ask-office-title">Ask an office</p>
+      <p className="ask-office-title">Ask an office or department</p>
       <label className="auth-field">
         <span>Send to</span>
         <select value={officeId} onChange={(e) => setOfficeId(e.target.value)} required>
-          {offices.map((office) => (
-            <option key={office.id} value={office.id}>
-              {office.name}
-            </option>
+          {GROUPS.map(([kind, label]) => (
+            <optgroup key={kind} label={label}>
+              {offices
+                .filter((office) => office.kind === kind)
+                .map((office) => (
+                  <option key={office.id} value={office.id}>
+                    {office.name}
+                  </option>
+                ))}
+            </optgroup>
           ))}
         </select>
       </label>
@@ -58,8 +71,8 @@ export default function AskOffice({ question, inquiryId, token, onSent, onCancel
         />
       </label>
       <p className="ask-office-note">
-        The office answers in UB There, under “My questions”. Your email address isn’t shared
-        with them.
+        They answer in UB There, and you’ll find it under “My questions”. They see your name, not
+        your email address.
       </p>
       {error && (
         <p className="auth-error" role="alert">

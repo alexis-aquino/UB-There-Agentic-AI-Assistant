@@ -57,6 +57,7 @@ export default function App() {
         token={auth.token}
         theme={theme}
         defaultPassword={auth.config.default_password}
+        offices={auth.config.offices ?? []}
         onChangePassword={auth.changePassword}
         onRename={auth.updateName}
         onSignOut={auth.logout}

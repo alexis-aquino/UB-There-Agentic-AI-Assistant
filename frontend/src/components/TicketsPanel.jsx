@@ -52,7 +52,7 @@ export default function TicketsPanel({ token, onClose }) {
       {!tickets && !error && <p className="voice-hint">Loading…</p>}
       {tickets?.length === 0 && (
         <p className="voice-hint">
-          Nothing yet. When I can’t answer something, tap “Ask an office” under my reply and I’ll
+          Nothing yet. When I can’t answer something, tap “Ask an office or department” under my reply and I’ll
           pass your question along.
         </p>
       )}

@@ -60,6 +60,28 @@ def test_a_department_flags_only_its_own_students_questions():
     assert client.put(f"/api/admin/inquiries/{q_other}/flag", json={"flagged": True}, headers=dept).status_code == 404
 
 
+def test_the_admin_rejects_a_waiting_sign_up_and_it_is_told_why():
+    headers, waiting = make("department", "Univ Libary")  # a typo the admin won't approve
+    _, approved = make("department", MINE, approved=True)
+    _, student = make("student", MINE)
+    reject = lambda ids, who=ADMIN: client.post("/api/admin/accounts/reject", json={"ids": ids}, headers=who)  # noqa: E731
+
+    assert reject([waiting.id], headers).status_code == 403  # administrators only
+    assert reject([approved.id]).status_code == 400 and reject([student.id]).status_code == 400
+    listed = {a["email"] for a in reject([waiting.id]).json()["accounts"]}
+    assert waiting.email not in listed and approved.email in listed
+
+    assert client.get("/api/auth/me", headers=headers).status_code == 401  # signed out at once
+    login = client.post("/api/auth/login", json={"email": waiting.email, "password": "12345678"})
+    assert login.status_code == 403 and "rejected your sign-up as Univ Libary" in login.json()["detail"]
+    wrong = client.post("/api/auth/login", json={"email": waiting.email, "password": "not-it"})
+    assert wrong.status_code == 401  # only someone with the password learns it was rejected
+
+    # Signing up again replaces the rejected sign-up.
+    auth.get_store().create(waiting.email, "Library", account_type="department", department="University Library")
+    assert client.post("/api/auth/login", json={"email": waiting.email, "password": "12345678"}).status_code == 200
+
+
 def test_students_guests_and_unapproved_departments_get_no_dashboard():
     for headers in (make("student", MINE)[0], make("guest", domain="example.com")[0], make("department", MINE)[0]):
         assert client.get("/api/admin/inquiries", headers=headers).status_code == 403

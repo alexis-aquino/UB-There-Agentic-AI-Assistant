@@ -19,7 +19,13 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r ..\requirements.txt
 copy .env.example .env
 .\.venv\Scripts\python.exe ingest.py
-.\.venv\Scripts\python.exe -c "from app.config import get_settings as g; from app.auth.store import UserStore; s = UserStore(g().users_db, g().default_password); D = 'College of Information and Communications Technology'; s.create('admin@ub.edu.ph', 'UB Admin'); s.create('student@ub.edu.ph', 'UB Student', account_type='student', department=D); s.create('guest@ub.edu.ph', 'UB Guest', account_type='guest'); d = s.create('department@ub.edu.ph', 'UB Department', account_type='department', department=D); s.approve([d.id], 'Test setup')"
+.\.venv\Scripts\python.exe -c "from app.config import get_settings as g; from app.auth.store import UserStore; s = UserStore(g().users_db, g().default_password); D = 'College of Information and Communications Technology'; s.create('admin@ub.edu.ph', 'UB Admin'); s.create('student@ub.edu.ph', 'UB Student', account_type='student', department=D); s.create('guest@ub.edu.ph', 'UB Guest', account_type='guest'); d = s.create('department@ub.edu.ph', 'UB Department', account_type='department', department=D); r = s.create('registrar@ub.edu.ph', 'UB Registrar', account_type='department', department=\"Registrar's Office\"); s.approve([d.id, r.id], 'Test setup')"
+```
+
+Already made the other test accounts before the office one existed? Add just the office account:
+
+```
+.\.venv\Scripts\python.exe -c "from app.config import get_settings as g; from app.auth.store import UserStore; s = UserStore(g().users_db, g().default_password); r = s.create('registrar@ub.edu.ph', 'UB Registrar', account_type='department', department=\"Registrar's Office\"); s.approve([r.id], 'Test setup')"
 ```
 
 ```
@@ -53,8 +59,9 @@ Open **http://localhost:5273** → **Login** → sign in with a test account bel
 | Student | student@ub.edu.ph | 12345678 |
 | Guest | guest@ub.edu.ph | 12345678 |
 | University department | department@ub.edu.ph | 12345678 |
+| University office (Registrar) | registrar@ub.edu.ph | 12345678 |
 | Admin | admin@ub.edu.ph | 12345678 |
 
 Every new account (guest or UB Mail) also starts with the password **12345678**.
 
-The student and department test accounts belong to the College of Information and Communications Technology; the department account is already approved, so it opens the department dashboard. New accounts can also be made with **Sign up** (Student, Guest or University department). A new department account waits until an admin clicks **Approve** in the dashboard's Accounts tab.
+The student and department test accounts belong to the College of Information and Communications Technology; the department account is already approved, so it opens the department dashboard. The office account belongs to the Registrar's Office and is also approved: questions students send the Registrar wait in its **Questions to answer** tab. New accounts can also be made with **Sign up** (Student, Guest or University department). A new department account waits until an admin clicks **Approve** in the dashboard's Accounts tab.

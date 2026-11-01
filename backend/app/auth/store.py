@@ -27,6 +27,16 @@ CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+-- University department sign-ups an administrator rejected. The account itself is deleted; this is
+-- kept only so signing in with it says why, and goes when the address signs up again.
+CREATE TABLE IF NOT EXISTS rejections (
+    email TEXT PRIMARY KEY COLLATE NOCASE,
+    password_hash TEXT NOT NULL,
+    department TEXT,
+    rejected_by TEXT NOT NULL,
+    rejected_at TEXT NOT NULL
+);
 """
 
 
@@ -41,6 +51,9 @@ COLUMNS = {
     "department": "TEXT",  # students and university departments
     "approved_by": "TEXT",  # university departments: the administrator who let them in
     "approved_at": "TEXT",
+    # University department accounts that typed in their own (Other): department | office. NULL when
+    # they chose a listed college or office, whose kind is known from departments.json / offices.json.
+    "unit_kind": "TEXT",
 }
 
 
@@ -128,13 +141,14 @@ class UserStore:
         picture: str | None = None,
         account_type: str | None = None,
         department: str | None = None,
+        unit_kind: str | None = None,
     ) -> User:
         password = password or self.default_password
         try:
             with self._lock:
                 cursor = self._connection.execute(
                     "INSERT INTO users (email, name, password_hash, google_sub, picture, default_password,"
-                    " account_type, department) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    " account_type, department, unit_kind) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         email.strip(),
                         name.strip(),
@@ -144,8 +158,11 @@ class UserStore:
                         int(password == self.default_password),
                         account_type,
                         department,
+                        unit_kind,
                     ),
                 )
+                # Signing up again replaces an earlier rejected sign-up.
+                self._connection.execute("DELETE FROM rejections WHERE email = ?", (email.strip(),))
                 self._connection.commit()
         except sqlite3.IntegrityError as exc:
             raise EmailTakenError(email) from exc
@@ -211,9 +228,22 @@ class UserStore:
         with self._lock:
             return self._connection.execute(
                 "SELECT id, email, name, google_sub IS NOT NULL AS google_linked, created_at, "
-                "last_active_at, disabled_by, disabled_at, account_type, department, approved_by, approved_at "
-                "FROM users ORDER BY id"
+                "last_active_at, disabled_by, disabled_at, account_type, department, approved_by, approved_at, "
+                "unit_kind FROM users ORDER BY id"
             ).fetchall()
+
+    def approved_units(self, kind: str) -> list[str]:
+        """The departments or offices (`kind`) of approved, enabled University department accounts.
+        No kind counts as an office: a name typed in before the kind was asked. Listed colleges and
+        offices are in here too; the caller drops them."""
+        with self._lock:
+            rows = self._connection.execute(
+                "SELECT DISTINCT department FROM users WHERE account_type = 'department' "
+                "AND (unit_kind = ? OR (unit_kind IS NULL AND ? = 'office')) "
+                "AND approved_by IS NOT NULL AND disabled_by IS NULL AND department IS NOT NULL ORDER BY department",
+                (kind, kind),
+            ).fetchall()
+        return [row["department"] for row in rows]
 
     def set_disabled(self, user_ids: list[int], by: str | None) -> None:
         """Disable the accounts (by an administrator's name), or enable them again with `by` None.
@@ -240,6 +270,33 @@ class UserStore:
                 [(by, now_iso(), i) for i in user_ids],
             )
             self._connection.commit()
+
+    def pending(self, user_ids: list[int]) -> list[int]:
+        """Those of `user_ids` that are University department accounts still waiting for approval."""
+        with self._lock:
+            rows = self._connection.execute(
+                "SELECT id FROM users WHERE account_type = 'department' AND approved_by IS NULL"
+            ).fetchall()
+        waiting = {row["id"] for row in rows}
+        return [i for i in user_ids if i in waiting]
+
+    def reject(self, user_ids: list[int], by: str) -> None:
+        """Delete University department sign-ups still waiting for approval, keeping a note of each
+        rejection so the person is told why when they next sign in."""
+        ids = self.pending(user_ids)
+        with self._lock:
+            self._connection.executemany(
+                "INSERT OR REPLACE INTO rejections (email, password_hash, department, rejected_by, rejected_at) "
+                "SELECT email, password_hash, department, ?, ? FROM users WHERE id = ?",
+                [(by, now_iso(), i) for i in ids],
+            )
+            self._connection.executemany("DELETE FROM users WHERE id = ?", [(i,) for i in ids])
+            self._connection.commit()
+
+    def rejection(self, email: str, password: str) -> sqlite3.Row | None:
+        """The rejected sign-up with this email, only for someone who knows its password."""
+        row = self._one("SELECT * FROM rejections WHERE email = ?", (email.strip(),))
+        return row if row and verify_password(password, row["password_hash"]) else None
 
     def delete(self, user_ids: list[int]) -> None:
         with self._lock:

@@ -92,9 +92,10 @@ export default function useAuth() {
 
   // accountType: 'student' | 'guest' | 'department'; students and departments pick a department.
   const signup = useCallback(
-    (name, email, password, accountType = 'guest', department = null) =>
+    // unitKind: 'department' | 'office', for a department or office typed in under Other.
+    (name, email, password, accountType = 'guest', department = null, unitKind = null) =>
       request('/signup', {
-        body: { name, email, password, account_type: accountType, department },
+        body: { name, email, password, account_type: accountType, department, unit_kind: unitKind },
       }).then(startSession),
     [startSession]
   );

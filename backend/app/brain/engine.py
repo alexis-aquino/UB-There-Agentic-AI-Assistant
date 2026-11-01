@@ -78,10 +78,15 @@ FOLLOW_UP_RE = re.compile(
     r"it|its|it's|that|this|they|those|them)\b",
     re.I,
 )
-# The model is told to say exactly this when the excerpts don't answer the question.
+# The model is told to say "I couldn't find that" when the excerpts don't answer the question, but it
+# often words it its own way, sometimes with a word or two in between: "isn't really mentioned in
+# the handbook", "doesn't actually say". Any of these means the question still needs an office.
+_SOFTENER = r"(?:\w+\s+){0,2}"  # "really", "explicitly", "actually say"
 NOT_FOUND_RE = re.compile(
-    r"couldn[’']?t find|could not find|can[’']?t find|not (?:mentioned|covered) in|"
-    r"(?:doesn[’']?t|does not) (?:say|mention|cover)",
+    r"couldn[’']?t find|could not find|can[’']?t find|"
+    rf"(?:\bnot|n[’']t)\s+{_SOFTENER}(?:mentioned|covered|stated|specified|listed)\s+in\b|"
+    rf"(?:doesn[’']?t|does not|didn[’']?t|did not)\s+{_SOFTENER}(?:say|mention|cover|specify|state|list)\b|"
+    r"\bno (?:mention|information|details?) (?:of|about|on)\b",
     re.I,
 )
 

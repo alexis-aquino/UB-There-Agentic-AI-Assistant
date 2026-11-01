@@ -42,6 +42,9 @@ class SignupRequest(BaseModel):
     password: str | None = Field(default=None, min_length=8, max_length=128)
     account_type: Literal["student", "guest", "department"] = "guest"
     department: str | None = Field(default=None, max_length=120)
+    # University departments that typed their own in (Other): what it is. A department has students,
+    # who can choose it once it's approved; an office has none.
+    unit_kind: Literal["department", "office"] | None = None
 
     @field_validator("name", "email", mode="before")
     @classmethod
@@ -113,6 +116,9 @@ class AuthConfig(BaseModel):
     google_domain: str
     default_password: str
     departments: list[str] = []
+    # The university offices (backend/offices.json). A University department account belongs to a
+    # college or one of these, and answers the questions sent to it.
+    offices: list[str] = []
 
 
 # ---------- asking an office ----------
@@ -125,7 +131,7 @@ class OfficeList(BaseModel):
 
 class TicketCreate(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
-    office_id: str = Field(min_length=1, max_length=40)
+    office_id: str = Field(min_length=1, max_length=120)  # an office's id, or a college's name
     # The chat question this came from (ChatResponse.inquiry_id), for the admin's inquiry report.
     inquiry_id: int | None = None
 
@@ -149,6 +155,28 @@ class TicketOut(BaseModel):
     answered_by: str | None = None
     created_at: str | None = None
     answered_at: str | None = None
+
+
+class StaffTicketOut(TicketOut):
+    """A ticket as the office or college answering it sees it: the student's name, never their email."""
+
+    student_name: str | None = None
+    student_department: str | None = None
+    # The student's account was deleted, so an answer would reach nobody.
+    closed: bool = False
+
+
+class AnswerRequest(BaseModel):
+    answer: str = Field(min_length=1, max_length=5000)
+
+    @field_validator("answer", mode="before")
+    @classmethod
+    def strip_answer(cls, value: object) -> object:
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                raise ValueError("Please write an answer first.")
+        return value
 
 
 # ---------- admin ----------

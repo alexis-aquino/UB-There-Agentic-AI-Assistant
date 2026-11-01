@@ -1,113 +1,229 @@
-import re
 import uuid
-from email import message_from_bytes, policy
 
 import pytest
 from fastapi.testclient import TestClient
 
+from app.auth.departments import load_departments
 from app.config import get_settings
 from app.main import app
 from app.routers import auth
+from tests.test_admin import ADMIN
 
 client = TestClient(app)
+REGISTRAR = "Registrar's Office"
+COLLEGE = load_departments()[0]
 
 
-def sign_up(google_linked=False):
-    """A fresh student. Google-linked students have a verified email address."""
-    email = f"t-{uuid.uuid4().hex[:8]}@example.com"
-    if google_linked:
-        user, _ = auth.get_store().sign_in_with_google(uuid.uuid4().hex, email, "Gina", None)
-        token = auth._session(user).token
+def sign_up(department=None):
+    """A fresh student, in `department` if given (a guest otherwise)."""
+    if department:
+        user = auth.get_store().create(
+            f"s-{uuid.uuid4().hex[:8]}@ub.edu.ph", "Sam", account_type="student", department=department
+        )
     else:
-        token = client.post("/api/auth/signup", json={"name": "Tess", "email": email}).json()["token"]
-    return {"Authorization": f"Bearer {token}"}, email
+        user = auth.get_store().create(f"t-{uuid.uuid4().hex[:8]}@example.com", "Tess", account_type="guest")
+    return {"Authorization": f"Bearer {auth._session(user).token}"}, user
 
 
-def outbox():
-    folder = get_settings().mail_outbox_dir
-    return sorted(folder.glob("*.eml")) if folder.exists() else []
+def staff(office):
+    """An approved University department account for an office or college."""
+    store = auth.get_store()
+    user = store.create(f"o-{uuid.uuid4().hex[:8]}@ub.edu.ph", "Ms. Reyes", account_type="department", department=office)
+    store.approve([user.id], "Test")
+    return {"Authorization": f"Bearer {auth._session(store.get(user.id)).token}"}
 
 
 def ask(headers, question="Can I get a copy of my grades early?", office="registrar"):
     return client.post("/api/tickets", json={"question": question, "office_id": office}, headers=headers)
 
 
-def read_email(path):
-    """Headers and decoded body, the way a mail program shows it."""
-    message = message_from_bytes(path.read_bytes(), policy=policy.default)
-    headers = "".join(f"{key}: {value}\n" for key, value in message.items())
-    return headers + "\n" + message.get_content()
+def inbox(headers):
+    return client.get("/api/admin/tickets", headers=headers)
 
 
-def answer_link_from(email_file):
-    text = read_email(email_file)
-    match = re.search(r"/answer/(UBT-\d+)\?t=(\S+)", text)
-    return match.group(1), match.group(2)
+def reply(headers, ref, text="Yes, request it at window 3."):
+    return client.post(f"/api/admin/tickets/{ref}/answer", json={"answer": text}, headers=headers)
 
 
-def test_offices_are_listed_with_a_suggestion():
+def test_offices_and_colleges_are_listed_with_a_suggestion():
     body = client.get("/api/offices", params={"question": "When is the tuition payment due?"}).json()
-    assert {"id": "accounting", "name": "Accounting / Cashier"} in body["offices"]
+    assert {"id": "accounting", "name": "Accounting / Cashier", "kind": "office"} in body["offices"]
+    assert {"id": COLLEGE, "name": COLLEGE, "kind": "department"} in body["offices"]
     assert body["suggested"] == "accounting"
+
+
+def test_a_students_own_college_is_suggested_when_no_office_fits():
+    headers, _ = sign_up(COLLEGE)
+    question = {"question": "Who is my thesis adviser?"}
+    assert client.get("/api/offices", params=question, headers=headers).json()["suggested"] == COLLEGE
+    assert client.get("/api/offices", params=question).json()["suggested"] == "registrar"
 
 
 def test_asking_an_office_needs_sign_in():
     assert ask({}).status_code == 401
 
 
-def test_ticket_emails_the_office_with_a_private_answer_link():
-    headers, student_email = sign_up()
-    before = len(outbox())
-
+def test_the_office_answers_in_the_dashboard_and_the_student_sees_it():
+    headers, student = sign_up(COLLEGE)
+    registrar = staff(REGISTRAR)
     response = ask(headers)
     assert response.status_code == 201
     ticket = response.json()
     assert ticket["ref"].startswith("UBT-") and ticket["status"] == "open"
 
-    emails = outbox()
-    assert len(emails) == before + 1
-    text = read_email(emails[-1])
-    assert "To: registrar@example.com" in text
-    assert ticket["ref"] in text
-    assert student_email not in text  # the office never sees the student's address
+    waiting = next(t for t in inbox(registrar).json() if t["ref"] == ticket["ref"])
+    assert waiting["student_name"] == "Sam" and waiting["student_department"] == COLLEGE
+    assert student.email not in str(waiting)  # the office never sees the student's address
 
-
-def test_office_answers_through_the_link_and_the_student_sees_it():
-    headers, _ = sign_up()
-    ref = ask(headers).json()["ref"]
-    link_ref, token = answer_link_from(outbox()[-1])
-    assert link_ref == ref
-
-    page = client.get(f"/answer/{ref}", params={"t": token})
-    assert page.status_code == 200 and "Can I get a copy of my grades early?" in page.text
-
-    saved = client.post(f"/answer/{ref}", data={"t": token, "answer": "Yes, request it at window 3.", "answered_by": "Ms. Reyes"})
-    assert saved.status_code == 200 and "Thank you" in saved.text
+    answered = reply(registrar, ticket["ref"]).json()
+    assert answered["status"] == "answered" and answered["answered_by"] == "Ms. Reyes"
 
     mine = client.get("/api/tickets", headers=headers).json()
-    assert mine[0]["ref"] == ref
+    assert mine[0]["ref"] == ticket["ref"]
     assert mine[0]["status"] == "answered"
     assert mine[0]["answer"] == "Yes, request it at window 3."
-    assert mine[0]["answered_by"] == "Ms. Reyes"
 
 
-@pytest.mark.parametrize("token", ["", "wrong-token"])
-def test_answer_link_needs_the_right_token(token):
+def test_a_college_receives_the_questions_sent_to_it():
+    headers, _ = sign_up(COLLEGE)
+    college = staff(COLLEGE)
+    ref = ask(headers, "Who is my thesis adviser?", office=COLLEGE).json()["ref"]
+    assert ref in [t["ref"] for t in inbox(college).json()]
+    assert reply(college, ref).status_code == 200
+
+
+def test_offices_only_see_and_answer_their_own_questions():
     headers, _ = sign_up()
     ref = ask(headers).json()["ref"]
-    assert client.get(f"/answer/{ref}", params={"t": token}).status_code == 404
-    assert client.post(f"/answer/{ref}", data={"t": token, "answer": "spam"}).status_code == 404
+    guidance = staff("Guidance Office")
+    assert ref not in [t["ref"] for t in inbox(guidance).json()]
+    assert reply(guidance, ref).status_code == 404
 
 
-def test_only_verified_students_get_an_email_when_answered():
-    for google_linked, expect_email in [(False, False), (True, True)]:
-        headers, student_email = sign_up(google_linked=google_linked)
-        ref = ask(headers).json()["ref"]
-        _, token = answer_link_from(outbox()[-1])
-        before = len(outbox())
-        client.post(f"/answer/{ref}", data={"t": token, "answer": "Done."})
-        new = outbox()[before:]
-        assert any(student_email in read_email(f) for f in new) is expect_email
+def test_an_offices_inquiry_report_is_the_questions_sent_to_it():
+    from tests.test_admin import log
+
+    headers, student = sign_up(COLLEGE)
+    sent, kept = log("Can I get my grades early?", user_id=student.id, answered=False), log(user_id=student.id)
+    body = {"question": "Can I get my grades early?", "office_id": "registrar", "inquiry_id": sent}
+    client.post("/api/tickets", json=body, headers=headers)
+    registrar, guidance = staff(REGISTRAR), staff("Guidance Office")
+
+    seen = {r["id"]: r for r in client.get("/api/admin/inquiries", headers=registrar).json()["inquiries"]}
+    assert sent in seen and kept not in seen and seen[sent]["status"] == "pending"
+    assert sent not in {r["id"] for r in client.get("/api/admin/inquiries", headers=guidance).json()["inquiries"]}
+    flag = f"/api/admin/inquiries/{sent}/flag"
+    assert client.put(flag, json={"flagged": True}, headers=registrar).status_code == 200
+    assert client.put(flag, json={"flagged": True}, headers=guidance).status_code == 404
+
+
+def test_the_admin_sees_every_question_and_can_answer_any():
+    headers, _ = sign_up()
+    ref = ask(headers, office="guidance").json()["ref"]
+    assert ref in [t["ref"] for t in inbox(ADMIN).json()]
+    assert reply(ADMIN, ref).status_code == 200
+
+
+def test_a_question_is_answered_once():
+    headers, _ = sign_up()
+    registrar = staff(REGISTRAR)
+    ref = ask(headers).json()["ref"]
+    assert reply(registrar, ref).status_code == 200
+    assert reply(registrar, ref, "Changed my mind").status_code == 409
+    assert reply(registrar, ask(headers).json()["ref"], "   ").status_code == 422
+
+
+def test_a_deleted_students_question_is_closed():
+    headers, student = sign_up()
+    registrar = staff(REGISTRAR)
+    ref = ask(headers).json()["ref"]
+    auth.get_store().delete([student.id])
+    assert next(t for t in inbox(registrar).json() if t["ref"] == ref)["closed"] is True
+    assert reply(registrar, ref).status_code == 410
+
+
+def test_students_and_unapproved_staff_have_no_inbox():
+    student, _ = sign_up(COLLEGE)
+    store = auth.get_store()
+    pending = store.create(f"p-{uuid.uuid4().hex[:8]}@ub.edu.ph", "New", account_type="department", department=REGISTRAR)
+    for headers in (student, {"Authorization": f"Bearer {auth._session(pending).token}"}):
+        assert inbox(headers).status_code == 403
+
+
+def test_office_staff_sign_up_for_their_office_but_students_cannot(monkeypatch):
+    def signup(kind):
+        email = f"{kind}-{uuid.uuid4().hex[:8]}@ub.edu.ph"
+        body = {"name": "X", "email": email, "account_type": kind, "department": REGISTRAR}
+        return client.post("/api/auth/signup", json=body)
+
+    monkeypatch.setattr(get_settings(), "google_client_id", "")  # UB addresses may use the form
+    assert signup("department").status_code == 201
+    assert signup("student").status_code == 400
+    assert REGISTRAR in client.get("/api/auth/config").json()["offices"]
+
+
+def test_an_office_typed_in_under_other_receives_questions_once_approved(monkeypatch):
+    monkeypatch.setattr(get_settings(), "google_client_id", "")
+    name = f"University Library {uuid.uuid4().hex[:4]}"
+
+    def signup(kind, department=name, unit_kind="office"):
+        email = f"{kind}-{uuid.uuid4().hex[:8]}@ub.edu.ph"
+        body = {"name": "X", "email": email, "account_type": kind, "department": department, "unit_kind": unit_kind}
+        return client.post("/api/auth/signup", json=body)
+
+    assert signup("student").status_code == 400  # students choose a listed college
+    assert signup("department", "   ").status_code == 400
+    assert signup("department", unit_kind=None).status_code == 400  # department or office?
+    created = signup("department", f"  {name} ")
+    assert created.status_code == 201 and created.json()["user"]["department"] == name
+
+    listed = lambda: {o["name"]: o["kind"] for o in client.get("/api/offices").json()["offices"]}  # noqa: E731
+    assert name not in listed()  # not until an administrator approves it
+    auth.get_store().approve([created.json()["user"]["id"]], "Test")
+    assert listed()[name] == "office" and name in client.get("/api/auth/config").json()["offices"]
+
+    headers, _ = sign_up()
+    ref = ask(headers, "Can I borrow books over the break?", office=name).json()["ref"]
+    library = {"Authorization": f"Bearer {created.json()['token']}"}
+    assert ref in [t["ref"] for t in inbox(library).json()]
+    assert reply(library, ref).status_code == 200
+
+    # A second staff member picks it from the list: it stays an office without being asked again.
+    assert signup("department", unit_kind=None).status_code == 201
+    staff_tags = {
+        a["department"]: a["unitKind"]
+        for a in client.get("/api/admin/accounts", headers=ADMIN).json()["accounts"]
+        if a["role"] == "department"
+    }
+    assert staff_tags[name] == "office" and staff_tags[REGISTRAR] == "office" and staff_tags[COLLEGE] == "department"
+
+
+def test_a_department_typed_in_under_other_gets_students_once_approved(monkeypatch):
+    monkeypatch.setattr(get_settings(), "google_client_id", "")
+    name = f"Graduate School {uuid.uuid4().hex[:4]}"
+
+    def signup(kind, unit_kind=None):
+        email = f"{kind}-{uuid.uuid4().hex[:8]}@ub.edu.ph"
+        body = {"name": "X", "email": email, "account_type": kind, "department": name, "unit_kind": unit_kind}
+        return client.post("/api/auth/signup", json=body)
+
+    created = signup("department", "department")
+    assert signup("student").status_code == 400  # not until it's approved
+    auth.get_store().approve([created.json()["user"]["id"]], "Test")
+
+    config = client.get("/api/auth/config").json()
+    assert name in config["departments"] and name not in config["offices"]
+    student = signup("student")
+    assert student.status_code == 201
+    listed = {o["name"]: o["kind"] for o in client.get("/api/offices").json()["offices"]}
+    assert listed[name] == "department"
+
+    # Its dashboard is a department's: its own students' questions.
+    from tests.test_admin import log
+
+    asked = log(user_id=student.json()["user"]["id"])
+    dept = {"Authorization": f"Bearer {created.json()['token']}"}
+    assert asked in {r["id"] for r in client.get("/api/admin/inquiries", headers=dept).json()["inquiries"]}
 
 
 def test_students_only_see_their_own_tickets():
@@ -131,16 +247,26 @@ def test_ticket_input_is_checked(payload):
     assert client.post("/api/tickets", json=payload, headers=headers).status_code in (400, 422)
 
 
-def test_failed_email_does_not_leave_an_orphan_ticket(monkeypatch):
-    from app import mail
+@pytest.mark.parametrize(
+    ("reply", "not_found"),
+    [
+        # Said by llama3.2 when the handbook had nothing; each must offer "Ask an office".
+        ("The deadline to pay the tuition installment for this semester isn't really mentioned in the handbook, "
+         "but it does say that if you pay in full you get a discount.", True),
+        ("The Wi-Fi password isn't explicitly mentioned in the handbook.", True),
+        ("I couldn't find that in the handbook.", True),
+        ("The handbook doesn't actually say who your thesis adviser is.", True),
+        ("There's no information about late applications in the handbook.", True),
+        # Real answers that happen to contain "not" or "don't".
+        ("Lab fees are not refundable once classes start.", False),
+        ("If you don't pay on time, a penalty of 5% applies.", False),
+        ("A student who did not take the exam must file a request within a week.", False),
+    ],
+)
+def test_a_reply_saying_the_handbook_lacks_it_offers_an_office(reply, not_found):
+    from app.brain.engine import NOT_FOUND_RE
 
-    def broken(*args, **kwargs):
-        raise mail.MailError("SMTP is down")
-
-    monkeypatch.setattr(mail, "send", broken)
-    headers, _ = sign_up()
-    assert ask(headers).status_code == 502
-    assert client.get("/api/tickets", headers=headers).json() == []
+    assert bool(NOT_FOUND_RE.search(reply)) is not_found
 
 
 def test_unanswerable_question_offers_an_office(index):

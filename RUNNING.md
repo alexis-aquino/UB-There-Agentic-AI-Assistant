@@ -148,9 +148,12 @@ it, **Admin / Guest login** (`#/guest`) is the email-and-password door, with gue
 
 - **Student**: a @ub.edu.ph address and a department.
 - **Guest**: any email, no department. A @ub.edu.ph address can't sign up as a guest.
-- **University department**: a @ub.edu.ph address and a department. It can sign in at once, but sees
+- **University department**: a @ub.edu.ph address and a department, or an office for office staff
+  (see [Asking an office or department](#asking-an-office-or-department)). It can sign in at once, but sees
   only a "waiting for approval" page until an administrator clicks **Approve** in the dashboard's
-  Accounts tab, so nobody can make themselves a department.
+  Accounts tab, so nobody can make themselves a department. **Reject** deletes a waiting sign-up at
+  once. Signing in with it then says it was rejected (only with the right password), and the
+  person can sign up again with the same address.
 
 The departments to choose from are in `backend\departments.json` (placeholders for now; replace them
 with UB's real list and restart the backend). Once Google sign-in is on (`GOOGLE_CLIENT_ID`), UB
@@ -160,8 +163,8 @@ addresses must use **Sign in with UB Mail** and the form is for guests only.
 
 Administrators and approved university departments go straight to the dashboard when they sign in;
 they never get the chat. A department's dashboard shows only its own students and their questions
-(guests and other departments are hidden), its **Students** tab is view-only, and it has no
-Knowledge base. Who counts as an administrator is set in `backend\.env`,
+(guests and other departments are hidden), its **Students** tab is view-only, and its **Questions
+to answer** tab holds the questions students sent it. Who counts as an administrator is set in `backend\.env`,
 then restart the backend:
 
 ```
@@ -195,44 +198,36 @@ was last used (signing in, opening the app, or asking a question) and how many q
   (`ACCOUNT_DELETE_AFTER_DAYS` in `backend\.env`). It removes the account but keeps its history:
   its questions stay in the Inquiry report under the student's name, marked "Account deleted", and
   its office tickets are kept. Questions that were still Rerouted or Pending become **Closed**, since
-  nobody can follow them up any more; the office's answer link says the question is closed and no
-  longer takes answers. Answered and Resolved questions keep their state. A flagged question still
+  nobody can follow them up any more; the office sees them as Closed and can no longer answer.
+  Answered and Resolved questions keep their state. A flagged question still
   shows as flagged.
 - An administrator can't disable or delete their own account.
 
-## Asking an office
+## Asking an office or department
 
-When the assistant can't answer, or isn't sure, its reply shows **Ask an office**. The student
-picks the office (the app suggests one from keywords) and sends. The app emails that office from
-its **own** address with a private **answer link**; staff answer on that page — no account needed
-— and the answer appears in the student's **My questions**. Students who signed in with Google also
-get an email when it's answered; guests' addresses were never verified, so they only see it in the
-app. The office never sees the student's email address. Each student can send 5 a day
-(`TICKETS_PER_DAY`).
+When the assistant can't answer, or isn't sure, its reply shows **Ask an office or department**.
+The student picks where it goes and sends it. The list has the offices (`backend\offices.json`) and
+the departments (`backend\departments.json`). The app suggests the office whose keywords fit the
+question ("tuition" → Accounting). If none fit, it suggests the student's own department. Each
+student can send 5 a day (`TICKETS_PER_DAY`).
 
-- **Offices** live in `backend\offices.json`: name, email and keywords. The addresses there are
-  placeholders (`@example.com`) — replace them with the real offices' addresses before turning on
-  real email.
-- **Until email is set up** (`MAIL_MODE=log`, the default) nothing is sent: each email is saved in
-  `backend\outbox\` as an `.eml` file. Double-click one to open it in Outlook or Mail; the answer
-  link inside works on this PC, so you can play the office yourself.
-- **To send real email** from the app's Gmail account:
-  1. Sign in to the app's Gmail account and turn on **2-Step Verification**
-     (Google Account → Security).
-  2. Google Account → Security → **App passwords** (or search "App passwords") → create one named
-     "UB There" and copy the 16-character password.
-  3. In `backend\.env`:
-     ```
-     MAIL_MODE=smtp
-     SMTP_USER=ubthere.assistant@gmail.com
-     SMTP_PASSWORD=abcdefghijklmnop
-     ```
-  4. Restart the backend. When UB IT gives you a ub.edu.ph address, change `SMTP_USER` and
-     `SMTP_PASSWORD` the same way.
-- **Answer links only work where staff can reach the app.** They point to `PUBLIC_BASE_URL`
-  (default `http://localhost:5273`), which is fine for testing on this PC. For office staff on
-  their own computers, the app has to be hosted at a real address; then set `PUBLIC_BASE_URL` to
-  it.
+The question then waits in that office's or department's dashboard, under **Questions to answer**.
+Staff write the answer there, and it appears in the student's **My questions**. No email is sent.
+Staff see the student's name and department, never their email address. A question is answered
+once.
+
+- **Who answers:** a University department account for that office or department. When signing up
+  as a University department, office staff choose their office (e.g. Registrar's Office) instead of
+  a college. If theirs isn't listed, they choose **Other**, say whether it's a **Department** or an
+  **Office**, and type its name. Once an administrator approves the account, students can send it
+  questions, and a typed-in department also joins the list students choose from at sign-up. So check
+  the name and kind before clicking Approve. An administrator approves the account as usual. An office's dashboard has the
+  Inquiry report, Questions to answer and the Knowledge base. It has no students of its own, so its
+  Inquiry report covers the questions sent to it, and it has no Students tab.
+- **Administrators** see every question sent to every office and department, and can answer any of
+  them, such as for an office that has no account yet.
+- **Offices** live in `backend\offices.json`: id, name and keywords. Restart the backend after
+  changing it.
 
 ## Switching the answer model (Ollama ↔ OpenAI)
 

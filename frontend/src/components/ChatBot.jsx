@@ -372,7 +372,7 @@ export default function ChatBot({ auth, theme, onOpenAdmin }) {
                         className="chip-button ask-office-open"
                         onClick={() => setAskingFor(idx)}
                       >
-                        Ask an office
+                        Ask an office or department
                       </button>
                     )}
                     {askingFor === idx && (

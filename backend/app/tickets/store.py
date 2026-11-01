@@ -1,10 +1,7 @@
-"""Tickets: one per question passed to an office. Lives in its own SQLite file."""
+"""Tickets: one per question passed to an office or college. Lives in its own SQLite file."""
 
 from __future__ import annotations
 
-import hashlib
-import hmac
-import secrets
 import sqlite3
 import threading
 from dataclasses import dataclass
@@ -20,17 +17,13 @@ CREATE TABLE IF NOT EXISTS tickets (
     status TEXT NOT NULL DEFAULT 'open',
     answer TEXT,
     answered_by TEXT,
-    token_hash TEXT NOT NULL,
+    token_hash TEXT NOT NULL DEFAULT '',  -- from when offices answered through an emailed link; unused
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     answered_at TEXT,
     inquiry_id INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_tickets_user ON tickets(user_id);
 """
-
-
-def _hash(token: str) -> str:
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def _iso(timestamp: str | None) -> str | None:
@@ -97,39 +90,41 @@ class TicketStore:
 
     def create(
         self, user_id: int, office_id: str, office_name: str, question: str, inquiry_id: int | None = None
-    ) -> tuple[Ticket, str]:
-        """Returns the ticket and its answer-link token. Only the token's hash is stored."""
-        token = secrets.token_urlsafe(24)
+    ) -> Ticket:
         with self._lock:
             cursor = self._connection.execute(
                 "INSERT INTO tickets (user_id, office_id, office_name, question, token_hash, inquiry_id)"
-                " VALUES (?, ?, ?, ?, ?, ?)",
-                (user_id, office_id, office_name, question, _hash(token), inquiry_id),
+                " VALUES (?, ?, ?, ?, '', ?)",
+                (user_id, office_id, office_name, question, inquiry_id),
             )
             self._connection.commit()
-        return self.get(cursor.lastrowid), token
+        return self.get(cursor.lastrowid)
 
     def get(self, ticket_id: int) -> Ticket | None:
         with self._lock:
             row = self._connection.execute("SELECT * FROM tickets WHERE id = ?", (ticket_id,)).fetchone()
         return Ticket.from_row(row) if row else None
 
-    def get_with_token(self, ref: str, token: str) -> Ticket | None:
-        """The ticket, only if `token` is the one emailed for it."""
+    def get_by_ref(self, ref: str) -> Ticket | None:
         ticket_id = parse_ref(ref)
-        if ticket_id is None or not token:
-            return None
-        with self._lock:
-            row = self._connection.execute("SELECT * FROM tickets WHERE id = ?", (ticket_id,)).fetchone()
-        if row is None or not hmac.compare_digest(row["token_hash"], _hash(token)):
-            return None
-        return Ticket.from_row(row)
+        return self.get(ticket_id) if ticket_id is not None else None
 
     def for_user(self, user_id: int) -> list[Ticket]:
         with self._lock:
             rows = self._connection.execute(
                 "SELECT * FROM tickets WHERE user_id = ? ORDER BY id DESC", (user_id,)
             ).fetchall()
+        return [Ticket.from_row(row) for row in rows]
+
+    def for_office(self, office_name: str | None = None) -> list[Ticket]:
+        """The tickets sent to one office or college, newest first; with no name, every ticket."""
+        with self._lock:
+            if office_name is None:
+                rows = self._connection.execute("SELECT * FROM tickets ORDER BY id DESC").fetchall()
+            else:
+                rows = self._connection.execute(
+                    "SELECT * FROM tickets WHERE office_name = ? ORDER BY id DESC", (office_name,)
+                ).fetchall()
         return [Ticket.from_row(row) for row in rows]
 
     def by_inquiry(self) -> dict[int, Ticket]:

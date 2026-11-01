@@ -7,6 +7,7 @@ import {
   disableAccounts,
   enableAccounts,
   loadAccounts,
+  rejectAccounts,
 } from '../admin/accounts.js';
 import { ago, day } from '../admin/store.js';
 
@@ -14,12 +15,31 @@ const UNUSED_DAYS = 60; // "Not used": no use in the last 2 months, or never
 const STATE_LABELS = { active: 'Active', inactive: 'Not used', disabled: 'Disabled' };
 const STATE_TONES = { active: 'ok', inactive: 'warn', disabled: 'danger' };
 const ROLE_TAGS = { admin: 'Admin', guest: 'Guest', department: 'Department' };
+// The administrator's tabs. Sign-ups waiting for approval get their own, so none is overlooked;
+// once approved, a department or office moves to its tab.
+const GROUPS = [
+  ['waiting', 'Waiting for approval'],
+  ['student', 'Students'],
+  ['staff', 'Departments & offices'], // tagged Department or Office
+  ['guest', 'Guests'],
+  ['admin', 'Administrators'],
+];
+const inGroup = (a, group) =>
+  ({
+    waiting: a.pending,
+    student: a.role === 'student',
+    staff: a.role === 'department' && !a.pending,
+    guest: a.role === 'guest',
+    admin: a.role === 'admin',
+  })[group];
 
 /** Every account, how recently it was used, disabling the ones nobody uses, and deleting those
  * that have stayed disabled for a month. All of it is stored by the backend. */
 // readOnly: a university department's view of its own students, with no account actions.
-export default function AdminAccounts({ user, token, readOnly = false }) {
+// onWaiting: told how many sign-ups are waiting for approval, for the dashboard's Accounts button.
+export default function AdminAccounts({ user, token, readOnly = false, onWaiting }) {
   const [accounts, setAccounts] = useState(null);
+  const [group, setGroup] = useState(null); // null until loaded: then Waiting if any, else Students
   const [wait, setWait] = useState(30); // days disabled before an account can be deleted
   const [loadError, setLoadError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -32,6 +52,9 @@ export default function AdminAccounts({ user, token, readOnly = false }) {
   const show = (data) => {
     setAccounts(data.accounts);
     setWait(data.deleteAfterDays);
+    const waiting = data.accounts.filter((a) => a.pending).length;
+    setGroup((g) => g ?? (waiting ? 'waiting' : 'student'));
+    onWaiting?.(waiting);
   };
 
   useEffect(() => {
@@ -44,17 +67,24 @@ export default function AdminAccounts({ user, token, readOnly = false }) {
   const stateOf = (a) => accountState(a, UNUSED_DAYS);
   const canDelete = (a) => a.disabled && daysUntilDeletable(a.disabled, wait) === 0;
 
+  // A department's view has only its students, so no tabs.
+  const groupCounts = Object.fromEntries(GROUPS.map(([key]) => [key, (accounts ?? []).filter((a) => inGroup(a, key)).length]));
+  const inTab = readOnly || !group ? accounts ?? [] : (accounts ?? []).filter((a) => inGroup(a, group));
+  const waitingCount = groupCounts.waiting;
+  // Not approved yet, so how it's been used means nothing: only who it is and what it chose.
+  const waitingTab = !readOnly && group === 'waiting';
+
   const counts = { active: 0, inactive: 0, disabled: 0 };
-  for (const a of accounts ?? []) counts[stateOf(a)] += 1;
+  for (const a of inTab) counts[stateOf(a)] += 1;
 
   const text = search.trim().toLowerCase();
-  const shown = (accounts ?? []).filter(
+  const shown = inTab.filter(
     (a) =>
       (!filter || stateOf(a) === filter) &&
       (!text || a.name.toLowerCase().includes(text) || a.email.toLowerCase().includes(text)),
   );
-  const unused = (accounts ?? []).filter((a) => stateOf(a) === 'inactive' && !isMe(a));
-  const deletable = (accounts ?? []).filter(canDelete);
+  const unused = inTab.filter((a) => stateOf(a) === 'inactive' && !isMe(a) && !a.pending);
+  const deletable = inTab.filter(canDelete);
   const picked = shown.filter((a) => selected.has(a.email));
 
   // Runs an action on the backend, which answers with the whole list as it now stands.
@@ -85,7 +115,16 @@ export default function AdminAccounts({ user, token, readOnly = false }) {
   const disable = (emails) => run(disableAccounts, emails);
   const approve = (emails) =>
     run(approveAccounts, emails, (n) => `Approved ${n} department account${n === 1 ? '' : 's'}.`);
+  const reject = (emails) =>
+    run(rejectAccounts, emails, (n) => `Rejected ${n} department sign-up${n === 1 ? '' : 's'}.`);
   const enable = (emails) => run(enableAccounts, emails);
+
+  function openGroup(key) {
+    setGroup(key);
+    setFilter('');
+    setSelected(new Set());
+    setConfirm(null);
+  }
 
   function toggle(email) {
     const next = new Set(selected);
@@ -120,10 +159,48 @@ export default function AdminAccounts({ user, token, readOnly = false }) {
         </div>
       </div>
 
+      {!readOnly && (
+        <div className="adm-tabs" role="tablist" aria-label="Kinds of account">
+          {GROUPS.map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={group === key}
+              className={key === 'waiting' && waitingCount > 0 ? 'adm-tab-alert' : undefined}
+              onClick={() => openGroup(key)}
+            >
+              {label} <span className="adm-chip-n">{groupCounts[key]}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {!readOnly && group !== 'waiting' && waitingCount > 0 && (
+        <div className="adm-callout is-alert">
+          <p>
+            <strong>{waitingCount}</strong> department or office {waitingCount === 1 ? 'sign-up is' : 'sign-ups are'}{' '}
+            waiting for approval.
+          </p>
+          <button type="button" className="chip-button" onClick={() => openGroup('waiting')}>
+            Review {waitingCount === 1 ? 'it' : 'them'}
+          </button>
+        </div>
+      )}
+
+      {!readOnly && group === 'waiting' && (
+        <p className="adm-sub">
+          {waitingCount > 0
+            ? 'Check each name and the department or office it chose (or typed under Other) before approving. Approved accounts move to Departments & offices; rejected ones are deleted, and they can sign up again.'
+            : 'No sign-ups are waiting. New department and office sign-ups appear here first.'}
+        </p>
+      )}
+
+      {!waitingTab && (
       <dl className="adm-ledger adm-ledger-short">
         <div>
-          <dt>Accounts</dt>
-          <dd>{accounts.length}</dd>
+          <dt>{readOnly ? 'Students' : (GROUPS.find(([key]) => key === group)?.[1] ?? 'Accounts')}</dt>
+          <dd>{inTab.length}</dd>
         </div>
         <div>
           <dt>Active</dt>
@@ -141,6 +218,7 @@ export default function AdminAccounts({ user, token, readOnly = false }) {
           <span className="adm-delta">can’t sign in</span>
         </div>
       </dl>
+      )}
 
       {note && (
         <p className="adm-kb-note" role="status">
@@ -148,7 +226,7 @@ export default function AdminAccounts({ user, token, readOnly = false }) {
         </p>
       )}
 
-      {!readOnly && deletable.length > 0 && !confirm && (
+      {!readOnly && !waitingTab && deletable.length > 0 && !confirm && (
         <div className="adm-callout is-danger">
           <p>
             <strong>{deletable.length}</strong> {deletable.length === 1 ? 'account has' : 'accounts have'} been disabled
@@ -196,21 +274,25 @@ export default function AdminAccounts({ user, token, readOnly = false }) {
         <div
           className="adm-callout is-confirm"
           role="alertdialog"
-          aria-label={confirm.action === 'delete' ? 'Confirm deleting' : 'Confirm disabling'}
+          aria-label={{ delete: 'Confirm deleting', reject: 'Confirm rejecting' }[confirm.action] ?? 'Confirm disabling'}
         >
           <p>
             {confirm.action === 'delete'
               ? `Delete ${confirm.label}? The account is removed for good. Its questions stay in the report under their name, and any still open are marked Closed. This can’t be undone.`
-              : `Disable ${confirm.label}? They won’t be able to sign in until an administrator enables them again.`}
+              : confirm.action === 'reject'
+                ? `Reject the sign-up of ${confirm.label}? The account is deleted now. If they sign in with it, they’re told it was rejected, and they can sign up again.`
+                : `Disable ${confirm.label}? They won’t be able to sign in until an administrator enables them again.`}
           </p>
           <div className="adm-callout-actions">
             <button
               type="button"
               className="adm-danger-button"
               disabled={busy}
-              onClick={() => (confirm.action === 'delete' ? remove(confirm.emails) : disable(confirm.emails))}
+              onClick={() =>
+                ({ delete: remove, reject, disable })[confirm.action](confirm.emails)
+              }
             >
-              {confirm.action === 'delete' ? 'Delete for good' : 'Disable'}
+              {{ delete: 'Delete for good', reject: 'Reject sign-up' }[confirm.action] ?? 'Disable'}
             </button>
             <button type="button" className="link-button" onClick={() => setConfirm(null)}>
               Cancel
@@ -220,21 +302,23 @@ export default function AdminAccounts({ user, token, readOnly = false }) {
       )}
 
       <div className="adm-filters">
-        <div className="adm-chips" role="group" aria-label="Filter by status">
-          <button type="button" aria-pressed={!filter} onClick={() => setFilter('')}>
-            All <span className="adm-chip-n">{accounts.length}</span>
-          </button>
-          {Object.entries(STATE_LABELS).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              aria-pressed={filter === key}
-              onClick={() => setFilter(filter === key ? '' : key)}
-            >
-              {label} <span className="adm-chip-n">{counts[key]}</span>
+        {!waitingTab && (
+          <div className="adm-chips" role="group" aria-label="Filter by status">
+            <button type="button" aria-pressed={!filter} onClick={() => setFilter('')}>
+              All <span className="adm-chip-n">{inTab.length}</span>
             </button>
-          ))}
-        </div>
+            {Object.entries(STATE_LABELS).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={filter === key}
+                onClick={() => setFilter(filter === key ? '' : key)}
+              >
+                {label} <span className="adm-chip-n">{counts[key]}</span>
+              </button>
+            ))}
+          </div>
+        )}
         <div className="adm-filter-row">
           <input
             type="search"
@@ -243,7 +327,27 @@ export default function AdminAccounts({ user, token, readOnly = false }) {
             placeholder="Search names or emails…"
             aria-label="Search names or emails"
           />
-          {!readOnly && picked.length > 0 && (
+          {!readOnly && group === 'waiting' && picked.length > 0 && (
+            <>
+              <button type="button" className="chip-button" disabled={busy} onClick={() => approve(picked.map((a) => a.email))}>
+                Approve selected ({picked.length})
+              </button>
+              <button
+                type="button"
+                className="link-button adm-danger-link"
+                onClick={() =>
+                  setConfirm({
+                    action: 'reject',
+                    emails: picked.map((a) => a.email),
+                    label: `the ${picked.length} selected account${picked.length === 1 ? '' : 's'}`,
+                  })
+                }
+              >
+                Reject selected ({picked.length})
+              </button>
+            </>
+          )}
+          {!readOnly && group !== 'waiting' && picked.length > 0 && (
             <>
               <button
                 type="button"
@@ -303,11 +407,16 @@ export default function AdminAccounts({ user, token, readOnly = false }) {
                   </th>
                 )}
                 <th scope="col">Account</th>
+                {waitingTab && <th scope="col">Department or office</th>}
                 <th scope="col">Sign-in</th>
-                <th scope="col">Joined</th>
-                <th scope="col">Last used</th>
-                <th scope="col">Questions</th>
-                <th scope="col">Status</th>
+                <th scope="col">{waitingTab ? 'Signed up' : 'Joined'}</th>
+                {!waitingTab && (
+                  <>
+                    <th scope="col">Last used</th>
+                    <th scope="col">Questions</th>
+                    <th scope="col">Status</th>
+                  </>
+                )}
                 {!readOnly && (
                   <th scope="col">
                     <span className="sr-only">Action</span>
@@ -336,37 +445,65 @@ export default function AdminAccounts({ user, token, readOnly = false }) {
                     <td>
                       <span className="adm-account-name">
                         {a.name}
-                        {ROLE_TAGS[a.role] && <span className="adm-tag">{ROLE_TAGS[a.role]}</span>}
-                        {a.pending && <span className="adm-tag">Waiting for approval</span>}
+                        {ROLE_TAGS[a.role] && (
+                          <span className="adm-tag">{a.unitKind === 'office' ? 'Office' : ROLE_TAGS[a.role]}</span>
+                        )}
+                        {a.pending && !waitingTab && <span className="adm-tag">Waiting for approval</span>}
                         {isMe(a) && <span className="adm-tag">You</span>}
                       </span>
                       <span className="adm-log-ref">{a.email}</span>
-                      {a.department && <span className="adm-log-ref">{a.department}</span>}
+                      {a.department && !waitingTab && <span className="adm-log-ref">{a.department}</span>}
                     </td>
+                    {waitingTab && (
+                      <td>
+                        {a.department ?? '—'}
+                        {a.typedIn && <span className="adm-log-ref">Typed in under Other · check the name</span>}
+                      </td>
+                    )}
                     <td className="adm-log-muted">{a.signIn}</td>
                     <td className="adm-log-muted">{day(a.createdAt)}</td>
-                    <td className="adm-log-muted" title={day(a.lastActiveAt)}>
-                      {ago(a.lastActiveAt)}
-                    </td>
-                    <td className="adm-log-muted">{a.questions}</td>
-                    <td>
-                      <span className={`adm-pill is-${STATE_TONES[state]}`}>{STATE_LABELS[state]}</span>
-                      {off && (
-                        <span className="adm-log-ref">
-                          by {off.by}, {day(off.at)}
-                          {daysUntilDeletable(off, wait) > 0 &&
-                            ` · can be deleted in ${daysUntilDeletable(off, wait)} day${daysUntilDeletable(off, wait) === 1 ? '' : 's'}`}
-                        </span>
-                      )}
-                    </td>
+                    {!waitingTab && (
+                      <>
+                        <td className="adm-log-muted" title={day(a.lastActiveAt)}>
+                          {ago(a.lastActiveAt)}
+                        </td>
+                        <td className="adm-log-muted">{a.questions}</td>
+                        <td>
+                          <span className={`adm-pill is-${STATE_TONES[state]}`}>{STATE_LABELS[state]}</span>
+                          {off && (
+                            <span className="adm-log-ref">
+                              by {off.by}, {day(off.at)}
+                              {daysUntilDeletable(off, wait) > 0 &&
+                                ` · can be deleted in ${daysUntilDeletable(off, wait)} day${daysUntilDeletable(off, wait) === 1 ? '' : 's'}`}
+                            </span>
+                          )}
+                        </td>
+                      </>
+                    )}
                     {!readOnly && (
                     <td className="adm-row-action">
-                      {a.pending && !off && (
-                        <button type="button" className="link-button" disabled={busy} onClick={() => approve([a.email])}>
-                          Approve
-                        </button>
-                      )}{' '}
-                      {isMe(a) ? null : off ? (
+                      {isMe(a) ? null : a.pending ? (
+                        <span className="adm-callout-actions adm-row-buttons">
+                          {!off && (
+                            <button type="button" className="link-button" disabled={busy} onClick={() => approve([a.email])}>
+                              Approve
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            className="link-button adm-danger-link"
+                            onClick={() =>
+                              setConfirm({
+                                action: 'reject',
+                                emails: [a.email],
+                                label: `${a.name} (${a.department ?? 'no department'})`,
+                              })
+                            }
+                          >
+                            Reject
+                          </button>
+                        </span>
+                      ) : off ? (
                         <span className="adm-callout-actions adm-row-buttons">
                           <button type="button" className="link-button" onClick={() => enable([a.email])}>
                             Enable

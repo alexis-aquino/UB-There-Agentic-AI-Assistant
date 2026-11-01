@@ -16,6 +16,13 @@ const SIGNUP_TYPES = [
   ['department', 'University department', 'UB Mail; an administrator approves it'],
 ];
 
+// A department or office that isn't listed: the person types its name and says which it is.
+const OTHER = '__other__';
+const UNIT_KINDS = [
+  ['department', 'Department', 'Has students, who can choose it once it’s approved'],
+  ['office', 'Office', 'Serves every student; no students of its own'],
+];
+
 function viewFromHash() {
   return VIEWS[window.location.hash] ?? 'ubmail';
 }
@@ -36,6 +43,8 @@ export default function AuthPage({ auth, theme }) {
   const [showPassword, setShowPassword] = useState(false);
   const [accountType, setAccountType] = useState('student');
   const [department, setDepartment] = useState('');
+  const [otherName, setOtherName] = useState(''); // typed in when the department is "Other"
+  const [unitKind, setUnitKind] = useState(''); // and whether it's a department or an office
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -45,6 +54,10 @@ export default function AuthPage({ auth, theme }) {
   const types = SIGNUP_TYPES.filter(([key]) => !googleOn || key === 'guest');
   const chosen = types.some(([key]) => key === accountType) ? accountType : types[0][0];
   const needsDepartment = chosen !== 'guest';
+  // Only department accounts can be an office or type one in; switching to Student drops either.
+  const staffOnly = department === OTHER || (config.offices ?? []).includes(department);
+  const picked = chosen === 'department' || !staffOnly ? department : '';
+  const departmentName = picked === OTHER ? otherName.trim() : picked;
 
   useEffect(() => {
     const onHash = () => setView(viewFromHash());
@@ -73,7 +86,7 @@ export default function AuthPage({ auth, theme }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (view === 'signup') {
-      run(() => signup(name.trim(), email.trim(), password, chosen, needsDepartment ? department : null));
+      run(() => signup(name.trim(), email.trim(), password, chosen, needsDepartment ? departmentName : null, picked === OTHER ? unitKind : null));
     }
     else run(() => login(email.trim(), password));
   };
@@ -208,21 +221,79 @@ export default function AuthPage({ auth, theme }) {
 
               {view === 'signup' && needsDepartment && (
                 <label className="auth-field">
-                  <span>Department</span>
-                  <select value={department} onChange={(e) => setDepartment(e.target.value)} required>
-                    <option value="">Choose your department…</option>
-                    {(config.departments ?? []).map((d) => (
-                      <option key={d} value={d}>
-                        {d}
-                      </option>
-                    ))}
+                  <span>{chosen === 'department' ? 'Department or office' : 'Department'}</span>
+                  <select value={picked} onChange={(e) => setDepartment(e.target.value)} required>
+                    <option value="">
+                      {chosen === 'department' ? 'Choose your department or office…' : 'Choose your department…'}
+                    </option>
+                    {chosen === 'department' ? (
+                      <>
+                        <optgroup label="Departments">
+                          {(config.departments ?? []).map((d) => (
+                            <option key={d} value={d}>
+                              {d}
+                            </option>
+                          ))}
+                        </optgroup>
+                        {/* Office staff answer the questions students send their office. */}
+                        <optgroup label="Offices">
+                          {(config.offices ?? []).map((d) => (
+                            <option key={d} value={d}>
+                              {d}
+                            </option>
+                          ))}
+                        </optgroup>
+                        <option value={OTHER}>Other (type it in)</option>
+                      </>
+                    ) : (
+                      (config.departments ?? []).map((d) => (
+                        <option key={d} value={d}>
+                          {d}
+                        </option>
+                      ))
+                    )}
                   </select>
+                </label>
+              )}
+
+              {view === 'signup' && picked === OTHER && (
+                <fieldset className="auth-types">
+                  <legend>It’s a</legend>
+                  {UNIT_KINDS.map(([key, label, note]) => (
+                    <label key={key} className={unitKind === key ? 'is-on' : ''}>
+                      <input
+                        type="radio"
+                        name="unit-kind"
+                        value={key}
+                        checked={unitKind === key}
+                        onChange={() => setUnitKind(key)}
+                        required
+                      />
+                      <strong>{label}</strong>
+                      <span>{note}</span>
+                    </label>
+                  ))}
+                </fieldset>
+              )}
+
+              {view === 'signup' && picked === OTHER && (
+                <label className="auth-field">
+                  <span>Name of your department or office</span>
+                  <input
+                    type="text"
+                    value={otherName}
+                    onChange={(e) => setOtherName(e.target.value)}
+                    placeholder="e.g. University Library"
+                    maxLength={120}
+                    required
+                  />
                 </label>
               )}
 
               {view === 'signup' && chosen === 'department' && (
                 <p className="auth-hint">
-                  An administrator approves department accounts before they can see any student’s questions.
+                  An administrator approves department and office accounts before they can see any student’s
+                  questions. Once approved, you answer the questions students send you.
                 </p>
               )}
 

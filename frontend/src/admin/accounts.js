@@ -22,6 +22,8 @@ export const disableAccounts = act('disable');
 export const enableAccounts = act('enable');
 export const deleteAccounts = act('delete');
 export const approveAccounts = act('approve');
+// Department sign-ups still waiting for approval only: deleted at once.
+export const rejectAccounts = act('reject');
 
 /** Whole days until a disabled account can be deleted; 0 once it can. */
 export function daysUntilDeletable(off, wait, now = new Date()) {

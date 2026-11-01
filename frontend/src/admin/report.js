@@ -8,7 +8,8 @@
 // brings the status back.
 export const STATES = {
   answered: { label: 'Answered by chatbot', tone: 'ok' },
-  rerouted: { label: 'Rerouted', tone: 'warn' },
+  // The stage, not the total: the report's Rerouted figure counts pending and resolved ones too.
+  rerouted: { label: 'Rerouted, not sent', tone: 'warn' },
   pending: { label: 'Pending', tone: 'wait' },
   resolved: { label: 'Resolved', tone: 'ok' },
   closed: { label: 'Closed', tone: 'muted' },
@@ -79,6 +80,10 @@ export function buildReport(records, selected) {
   const status = Object.fromEntries(Object.keys(STATES).map((key) => [key, 0]));
   for (const r of current) status[stateOf(r)] += 1;
   const sent = current.filter((r) => r.ticket).length; // sent to an office, whatever came of it
+  // Every question the chatbot couldn't answer, wherever it went next (pending and resolved ones
+  // were rerouted first), flagged or not; and those the student hasn't sent to an office.
+  const rerouted = current.filter((r) => r.status !== 'answered').length;
+  const notSent = current.filter((r) => r.status === 'rerouted').length;
 
   const repeats = new Map();
   for (const r of current) {
@@ -91,7 +96,7 @@ export function buildReport(records, selected) {
   }
   const topQuestions = [...repeats.values()].sort((a, b) => b.count - a.count).slice(0, 8);
 
-  return { period, inPeriod, months, volume, totals, before, topics, status, sent, topQuestions };
+  return { period, inPeriod, months, volume, totals, before, topics, status, sent, rerouted, notSent, topQuestions };
 }
 
 export function filterRecords(records, { months, status, topic, search }) {

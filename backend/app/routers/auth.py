@@ -3,7 +3,6 @@ from functools import lru_cache
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 
-from app.auth.departments import load_departments
 from app.auth.google import GoogleTokenError, verify_id_token
 from app.auth.security import issue_token, read_token
 from app.auth.store import EmailTakenError, User, UserStore
@@ -18,6 +17,7 @@ from app.schemas import (
     SignupRequest,
     UserOut,
 )
+from app.tickets.offices import all_departments, is_listed, load_offices
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -104,7 +104,8 @@ def config() -> AuthConfig:
         google_client_id=settings.google_client_id,
         google_domain=settings.google_domain,
         default_password=settings.default_password,
-        departments=load_departments(),
+        departments=all_departments(),
+        offices=[office.name for office in load_offices()],
     )
 
 
@@ -119,7 +120,7 @@ def signup(body: SignupRequest) -> AuthResponse:
             status_code=400,
             detail=f"@{domain} accounts sign in with Google. Use the Google button above.",
         )
-    department = None
+    department = unit_kind = None
     if body.account_type == "guest":
         if _in_domain(body.email):
             raise HTTPException(status_code=400, detail=f"@{domain} addresses sign up as a student or department.")
@@ -129,14 +130,31 @@ def signup(body: SignupRequest) -> AuthResponse:
                 status_code=400,
                 detail=f"Students and university departments sign up with their @{domain} UB Mail.",
             )
-        if body.department not in load_departments():
+        # Students belong to a college. A University department account belongs to a college, an
+        # office, or one it types in ("Other"): an administrator checks it when approving the account.
+        department = (body.department or "").strip()
+        if not department or (body.account_type == "student" and department not in all_departments()):
             raise HTTPException(status_code=400, detail="Please choose your department.")
-        department = body.department
+        if body.account_type == "department" and not is_listed(department):
+            # Typed in, or one an approved account typed in before (it keeps that kind).
+            if department in {office.name for office in load_offices()}:
+                unit_kind = "office"
+            elif department in all_departments():
+                unit_kind = "department"
+            elif body.unit_kind is None:
+                raise HTTPException(status_code=400, detail="Please say whether it's a department or an office.")
+            else:
+                unit_kind = body.unit_kind
     try:
         # A university department can sign in at once, but sees nothing of its students until
         # an administrator approves the account (Accounts page).
         user = get_store().create(
-            body.email, body.name, body.password, account_type=body.account_type, department=department
+            body.email,
+            body.name,
+            body.password,
+            account_type=body.account_type,
+            department=department,
+            unit_kind=unit_kind,
         )
     except EmailTakenError as exc:
         raise HTTPException(status_code=409, detail="An account with that email already exists.") from exc
@@ -147,6 +165,13 @@ def signup(body: SignupRequest) -> AuthResponse:
 def login(body: LoginRequest) -> AuthResponse:
     user = get_store().authenticate(body.email, body.password)
     if user is None:
+        rejected = get_store().rejection(body.email, body.password)
+        if rejected:
+            raise HTTPException(
+                status_code=403,
+                detail=f"An administrator rejected your sign-up as {rejected['department'] or 'a University department'}. "
+                "Check the name of your department or office and sign up again.",
+            )
         raise HTTPException(status_code=401, detail="Incorrect email or password.")
     return _session(user)
 
